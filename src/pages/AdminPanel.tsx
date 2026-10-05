@@ -27,6 +27,7 @@ import {
   safeJsonParse,
   getAuthHeaders,
   setStoredSessionToken,
+  apiFetch,
 } from '../context/StoreContext';
 
 type AdminSection =
@@ -252,7 +253,7 @@ export const AdminPanel: React.FC = () => {
   const checkAuth = useCallback(async () => {
     setAuthChecking(true);
     try {
-      const res = await fetch('/api/auth.php?action=check', {
+      const res = await apiFetch('auth', 'action=check', {
         credentials: 'include',
         headers: getAuthHeaders(),
       });
@@ -328,11 +329,11 @@ export const AdminPanel: React.FC = () => {
     setOrdersError('');
     try {
       const [dashRes, ordRes] = await Promise.all([
-        fetch('/api/dashboard.php', {
+        apiFetch('dashboard', undefined, {
           credentials: 'include',
           headers: getAuthHeaders(),
         }),
-        fetch('/api/orders.php', {
+        apiFetch('orders', undefined, {
           credentials: 'include',
           headers: getAuthHeaders(),
         }),
@@ -424,7 +425,7 @@ export const AdminPanel: React.FC = () => {
     setUpdatingOrderIds((prev) => ({ ...prev, [orderNumber]: true }));
 
     try {
-      const res = await fetch('/api/orders.php?action=update_status', {
+      const res = await apiFetch('orders', 'action=update_status', {
         method: 'POST',
         credentials: 'include',
         headers: getAuthHeaders({
@@ -535,7 +536,7 @@ export const AdminPanel: React.FC = () => {
 
     setLoginLoading(true);
     try {
-      const res = await fetch('/api/auth.php?action=login', {
+      const res = await apiFetch('auth', 'action=login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
@@ -626,7 +627,7 @@ export const AdminPanel: React.FC = () => {
 
     setRegLoading(true);
     try {
-      const res = await fetch('/api/auth.php?action=register', {
+      const res = await apiFetch('auth', 'action=register', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
@@ -681,7 +682,7 @@ export const AdminPanel: React.FC = () => {
   // Handle Logout action
   const handleLogout = async () => {
     try {
-      await fetch('/api/auth.php?action=logout', {
+      await apiFetch('auth', 'action=logout', {
         method: 'POST',
         credentials: 'include',
         headers: getAuthHeaders(),
@@ -739,7 +740,7 @@ export const AdminPanel: React.FC = () => {
 
     setPasswordSaving(true);
     try {
-      const res = await fetch('/api/auth.php?action=change_password', {
+      const res = await apiFetch('auth', 'action=change_password', {
         method: 'POST',
         headers: getAuthHeaders({
           'Content-Type': 'application/json',

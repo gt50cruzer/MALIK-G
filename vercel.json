@@ -5,7 +5,31 @@
   "outputDirectory": "dist",
   "rewrites": [
     {
-      "source": "/((?!assets/|.*\\..*).*)",
+      "source": "/api/auth.php",
+      "destination": "/api/auth"
+    },
+    {
+      "source": "/api/orders.php",
+      "destination": "/api/orders"
+    },
+    {
+      "source": "/api/products.php",
+      "destination": "/api/products"
+    },
+    {
+      "source": "/api/categories.php",
+      "destination": "/api/categories"
+    },
+    {
+      "source": "/api/dashboard.php",
+      "destination": "/api/dashboard"
+    },
+    {
+      "source": "/api/upload.php",
+      "destination": "/api/upload"
+    },
+    {
+      "source": "/((?!api/|assets/|.*\\..*).*)",
       "destination": "/index.html"
     }
   ],

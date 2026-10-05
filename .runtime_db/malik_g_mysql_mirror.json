@@ -1319,10 +1319,168 @@
   ],
   "orders": [
     {
+      "id": 5,
+      "orderNumber": "MGC-727949",
+      "createdAt": "2026-10-05T16:40:21.450Z",
+      "updatedAt": "2026-10-05T16:42:32.497Z",
+      "customer": {
+        "fullName": "abdul karem",
+        "phone": "03217126828",
+        "email": "test.customer2@gmail.com",
+        "city": "Sialkot",
+        "address": "neka pura bori muhalla"
+      },
+      "items": [
+        {
+          "product": {
+            "id": "mg-shoe-13",
+            "name": "Premium Black Formal Shoes",
+            "price": 4799,
+            "oldPrice": 5999,
+            "category": "Shoes",
+            "sizes": [
+              "39",
+              "40",
+              "41",
+              "42",
+              "43",
+              "44"
+            ],
+            "colors": [
+              {
+                "name": "Polished Onyx",
+                "hex": "#0F0F10"
+              }
+            ],
+            "rating": 4.9,
+            "reviewsCount": 83,
+            "shortDescription": "Hand-burnished full-grain calfskin cap-toe Oxfords with cushioned leather insole.",
+            "description": "Handcrafted by master shoemakers, our Premium Black Formal Shoes feature a sleek cap-toe silhouette, full leather lining, and a durable anti-slip gentleman’s heel built for formal excellence.",
+            "image": "/uploads/category_shoes.jpg",
+            "gallery": [
+              "/uploads/category_shoes.jpg"
+            ],
+            "inStock": true,
+            "isTrending": true,
+            "isNewArrival": true,
+            "tags": [
+              "shoes",
+              "formal shoes",
+              "black shoes",
+              "leather shoes",
+              "oxford"
+            ],
+            "sku": "MGC-SHOE-013",
+            "fabricOrMaterial": "100% Full-Grain Calfskin Leather",
+            "originalPrice": 5999,
+            "offerPrice": 4799,
+            "discountPercent": 20,
+            "published": true,
+            "dbId": 13
+          },
+          "quantity": 1,
+          "selectedSize": "41",
+          "selectedColor": "Polished Onyx"
+        }
+      ],
+      "orderItems": [
+        {
+          "productId": "mg-shoe-13",
+          "productNameSnapshot": "Premium Black Formal Shoes",
+          "productImageSnapshot": "/uploads/category_shoes.jpg",
+          "selectedColor": "Polished Onyx",
+          "selectedSize": "41",
+          "quantity": 1,
+          "unitPrice": 4799,
+          "originalPriceSnapshot": 5999,
+          "subtotal": 4799
+        }
+      ],
+      "subtotal": 4799,
+      "discount": 1200,
+      "total": 4799,
+      "status": "Confirmed",
+      "paymentMethod": "WhatsApp Order"
+    },
+    {
+      "id": 4,
+      "orderNumber": "MGC-687192",
+      "createdAt": "2026-10-05T16:38:43.919Z",
+      "updatedAt": "2026-10-05T16:43:44.569Z",
+      "customer": {
+        "fullName": "abdul karem",
+        "phone": "03217126828",
+        "email": "test.customer2@gmail.com",
+        "city": "Sialkot",
+        "address": "neka pura bori muhalla"
+      },
+      "items": [
+        {
+          "product": {
+            "id": "mg-watch-20",
+            "name": "Premium Black Leather Watch",
+            "price": 3599,
+            "category": "Watches",
+            "colors": [
+              {
+                "name": "Black / Gold Bezel",
+                "hex": "#1C1917"
+              }
+            ],
+            "rating": 4.8,
+            "reviewsCount": 48,
+            "shortDescription": "Ultra-thin dress watch with alligator-embossed genuine leather strap and gold indices.",
+            "description": "Designed to slip effortlessly beneath a buttoned French cuff, the Premium Black Leather Watch balances classic dress proportions with warm gold baton hour markers.",
+            "image": "/uploads/category_watches.jpg",
+            "gallery": [
+              "/uploads/category_watches.jpg"
+            ],
+            "inStock": true,
+            "tags": [
+              "watch",
+              "watches",
+              "leather watch",
+              "black watch",
+              "dress watch"
+            ],
+            "sku": "MGC-WT-020",
+            "fabricOrMaterial": "Alloy Case & Genuine Embossed Leather Strap",
+            "oldPrice": 4499,
+            "originalPrice": 4499,
+            "offerPrice": 3599,
+            "discountPercent": 20,
+            "published": true,
+            "dbId": 20
+          },
+          "quantity": 2,
+          "selectedSize": "N/A",
+          "selectedColor": "Black / Gold Bezel"
+        }
+      ],
+      "orderItems": [
+        {
+          "productId": "mg-watch-20",
+          "productNameSnapshot": "Premium Black Leather Watch",
+          "productImageSnapshot": "/uploads/category_watches.jpg",
+          "selectedColor": "Black / Gold Bezel",
+          "selectedSize": "N/A",
+          "quantity": 2,
+          "unitPrice": 3599,
+          "originalPriceSnapshot": 4499,
+          "subtotal": 7198
+        }
+      ],
+      "subtotal": 7198,
+      "discount": 1800,
+      "total": 7198,
+      "status": "Cancelled",
+      "paymentMethod": "WhatsApp Order"
+    },
+    {
       "id": 3,
       "orderNumber": "MGC-811493",
       "createdAt": "2026-10-05T09:10:41.207Z",
-      "updatedAt": "2026-10-05T09:10:41.207Z",
+      "updatedAt": "2026-10-05T16:32:21.636Z",
       "customer": {
         "fullName": "Abdurrehman adil",
         "phone": "03217126828",
@@ -1404,13 +1562,14 @@
       "subtotal": 2999,
       "discount": 500,
       "total": 2999,
-      "status": "Pending"
+      "status": "Confirmed",
+      "paymentMethod": "WhatsApp Order"
     },
     {
       "id": 2,
       "orderNumber": "MGC-439583",
       "createdAt": "2026-10-05T08:46:28.348Z",
-      "updatedAt": "2026-10-05T08:46:28.348Z",
+      "updatedAt": "2026-10-05T16:32:54.307Z",
       "customer": {
         "fullName": "Test Customer",
         "phone": "03217126828",
@@ -1446,13 +1605,14 @@
       "subtotal": 2999,
       "discount": 0,
       "total": 2999,
-      "status": "Pending"
+      "status": "Shipped",
+      "paymentMethod": "WhatsApp Order"
     },
     {
       "id": 1,
       "orderNumber": "MGC-290576",
       "createdAt": "2026-10-05T08:38:32.327Z",
-      "updatedAt": "2026-10-05T08:38:32.327Z",
+      "updatedAt": "2026-10-05T16:33:08.467Z",
       "customer": {
         "fullName": "Abdurrehman adil",
         "phone": "03217126828",
@@ -1520,7 +1680,8 @@
       "subtotal": 6999,
       "discount": 1000,
       "total": 6999,
-      "status": "Pending"
+      "status": "Delivered",
+      "paymentMethod": "WhatsApp Order"
     }
   ],
   "customers": [
@@ -1568,6 +1729,42 @@
       "passwordSalt": "288a3df508c1d3a919587684eff8f210",
       "passwordHash": "1c7cbdeb9d2a584ad62edc00552059f5a3e50997e10c580cf56556691d42276896ea91e0d2faffcb3d609e713b8f62b190a50fa2e0499fca708f7787abdc7aa1",
       "createdAt": "2026-10-05T15:05:27.809Z"
+    },
+    {
+      "id": 6,
+      "fullName": "abdul karem",
+      "email": "test.customer2@gmail.com",
+      "role": "customer",
+      "passwordSalt": "1cac43c4ba435a5f96e07a0f4a9afd8d",
+      "passwordHash": "8aefcec6bdc8bd4c0919802c39fb552a0386df81b6536376be90fb78d3f1b2cd37a10647e5d5a491e851ecdf30e5e14196ad200789e7e880a03357ff7e1fb598",
+      "createdAt": "2026-10-05T16:37:14.405Z"
+    },
+    {
+      "id": 7,
+      "fullName": "kaleem aqal",
+      "email": "ttttt@gmail.com",
+      "role": "customer",
+      "passwordSalt": "f1c2348360ef425b3f4f2d01a1006859",
+      "passwordHash": "c70778fe9646f1ccab6ad0be4cf057adeecc396ea7ee05f6945905ab81014aa8efee70694bbff9b94d40b24915db8814e4fa0ea53f15613792043f5731dff6b2",
+      "createdAt": "2026-10-05T16:49:25.198Z"
+    },
+    {
+      "id": 8,
+      "fullName": "Zain Malik",
+      "email": "vercel.customer.1791219545043@example.com",
+      "role": "customer",
+      "passwordSalt": "08a52fdea16b0116b9d9d264f0b7f402",
+      "passwordHash": "364246b976a92b94105a218bfac6b4dd3e8f0f176c1ae026a3148edeefd447df673bfd0f91183173545421418303a516fad5f8d21dd8e13adaf808713a500a43",
+      "createdAt": "2026-10-05T16:59:05.207Z"
+    },
+    {
+      "id": 9,
+      "fullName": "Usman Ali",
+      "email": "vercel.direct.1791219545220@example.com",
+      "role": "customer",
+      "passwordSalt": "157e0754e3ef90e1dde07e401cfee36b",
+      "passwordHash": "fa55a76ba58a99ff95cfe28d78b643d4fe1841a92b5afe73ba7ddcf09a42e7456a22157d7450860a41765c64df8b300e60ed1ba909e3e032551ba45727f202ff",
+      "createdAt": "2026-10-05T16:59:05.281Z"
     }
   ],
   "sessions": {
@@ -1578,6 +1775,38 @@
       "role": "customer",
       "csrfToken": "0b57ca90218ee0d6e5f7487af917b697553985199af6b990",
       "lastActivity": 1791212727809
+    },
+    "b131ad44c7de713c4b2102508fbd7b60f3edf011c23963df": {
+      "userId": 7,
+      "fullName": "kaleem aqal",
+      "email": "ttttt@gmail.com",
+      "role": "customer",
+      "csrfToken": "7bffa79c2b0dc1507a6dd54093cbcde67eed0b959c3441dd",
+      "lastActivity": 1791218965199
+    },
+    "mgc.eyJ1Ijo4LCJuIjoiWmFpbiBNYWxpayIsImUiOiJ2ZXJjZWwuY3VzdG9tZXIuMTc5MTIxOTU0NTA0M0BleGFtcGxlLmNvbSIsInIiOiJjdXN0b21lciIsImMiOiI5MGRmMmRhODhjYjJkMWM3MTc4MTA1YWRiMTQ5YTM2OWNmZDJkODEwMTE0YmIwMGIiLCJ0IjoxNzkxMjE5NTQ1MjA4fQ.FeVrUjw8cE7CrlOH0L7jXncZuPW2r6Jlvei87P5VcJY": {
+      "userId": 8,
+      "fullName": "Zain Malik",
+      "email": "vercel.customer.1791219545043@example.com",
+      "role": "customer",
+      "csrfToken": "90df2da88cb2d1c7178105adb149a369cfd2d810114bb00b",
+      "lastActivity": 1791219545208
+    },
+    "mgc.eyJ1Ijo5LCJuIjoiVXNtYW4gQWxpIiwiZSI6InZlcmNlbC5kaXJlY3QuMTc5MTIxOTU0NTIyMEBleGFtcGxlLmNvbSIsInIiOiJjdXN0b21lciIsImMiOiIwYWY1OWJjNjU5M2I4Mjc1YTAzODRjMWRlMDU4MGU1ZGU1OGM2NjhjYjgyOWFiZGIiLCJ0IjoxNzkxMjE5NTQ1MjgyfQ.TgGA1_n7cOxuhjpFF59es5CnbupuGgylhXtg3MePqb8": {
+      "userId": 9,
+      "fullName": "Usman Ali",
+      "email": "vercel.direct.1791219545220@example.com",
+      "role": "customer",
+      "csrfToken": "0af59bc6593b8275a0384c1de0580e5de58c668cb829abdb",
+      "lastActivity": 1791219545282
+    },
+    "mgc.eyJ1Ijo5LCJuIjoiVXNtYW4gQWxpIiwiZSI6InZlcmNlbC5kaXJlY3QuMTc5MTIxOTU0NTIyMEBleGFtcGxlLmNvbSIsInIiOiJjdXN0b21lciIsImMiOiJkODM3ZTg1M2Y1YjgxNmFlOTk4YzRjY2Y2NDk1YTkzMThiMTlhNWVjMWQ5ZDg0NDIiLCJ0IjoxNzkxMjE5NTQ1Mzg4fQ.Wc_FNX4L5bGMaS6wV1Aqi8wdAIIsMwH-vRW2KQT8rUU": {
+      "userId": 9,
+      "fullName": "Usman Ali",
+      "email": "vercel.direct.1791219545220@example.com",
+      "role": "customer",
+      "csrfToken": "d837e853f5b816ae998c4ccf6495a9318b19a5ec1d9d8442",
+      "lastActivity": 1791219545388
     }
   }
 }

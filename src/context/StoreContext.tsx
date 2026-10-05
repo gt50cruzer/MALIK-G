@@ -115,6 +115,61 @@ export function getAuthHeaders(extraHeaders?: Record<string, string>): Record<st
   return headers;
 }
 
+const CONFIGURED_API_BASE = String(
+  (import.meta as unknown as { env?: Record<string, string> }).env?.VITE_API_BASE_URL || ''
+)
+  .trim()
+  .replace(/\/+$/, '');
+
+export function buildApiUrl(
+  resource: 'auth' | 'orders' | 'products' | 'categories' | 'dashboard' | 'upload',
+  query?: string,
+  usePhpExtension = false
+): string {
+  const ext = usePhpExtension ? '.php' : '';
+  const pathPart = `/api/${resource}${ext}${query ? (query.startsWith('?') ? query : `?${query}`) : ''}`;
+  return CONFIGURED_API_BASE ? `${CONFIGURED_API_BASE}${pathPart}` : pathPart;
+}
+
+function isPhpSourceOrHtmlFallback(rawText: string): boolean {
+  const trimmed = rawText.trim();
+  return (
+    trimmed.startsWith('<?php') ||
+    trimmed.startsWith('<!DOCTYPE') ||
+    trimmed.toLowerCase().startsWith('<html')
+  );
+}
+
+/**
+ * Production-safe API fetch wrapper:
+ * 1. Calls `/api/<resource>` (handled natively by both Vercel Serverless Functions and AI Studio Express server.ts).
+ * 2. If deployed on a PHP-only shared host where extensionless `/api/<resource>` returns 404 or HTML,
+ *    automatically retries `/api/<resource>.php`.
+ */
+export async function apiFetch(
+  resource: 'auth' | 'orders' | 'products' | 'categories' | 'dashboard' | 'upload',
+  query?: string,
+  init?: RequestInit
+): Promise<Response> {
+  const primaryUrl = buildApiUrl(resource, query, false);
+  const res = await fetch(primaryUrl, init);
+
+  const contentType = (res.headers.get('content-type') || '').toLowerCase();
+  if (res.status === 404 || contentType.includes('text/html')) {
+    const cloneText = await res.clone().text();
+    if (res.status === 404 || isPhpSourceOrHtmlFallback(cloneText)) {
+      const phpFallbackUrl = buildApiUrl(resource, query, true);
+      const phpRes = await fetch(phpFallbackUrl, init);
+      const phpCloneText = await phpRes.clone().text();
+      if (!isPhpSourceOrHtmlFallback(phpCloneText)) {
+        return phpRes;
+      }
+    }
+  }
+
+  return res;
+}
+
 function loadFromStorage<T>(key: string, fallback: T): T {
   try {
     const raw = localStorage.getItem(key);
@@ -235,7 +290,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
   const refreshCustomerAuth = useCallback(async () => {
     try {
-      const res = await fetch('/api/auth.php?action=check', {
+      const res = await apiFetch('auth', 'action=check', {
         credentials: 'include',
         headers: getAuthHeaders(),
       });
@@ -274,8 +329,8 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   const refreshCatalog = useCallback(async () => {
     try {
       const [prodRes, catRes] = await Promise.all([
-        fetch('/api/products.php', { credentials: 'include' }),
-        fetch('/api/categories.php', { credentials: 'include' }),
+        apiFetch('products', undefined, { credentials: 'include' }),
+        apiFetch('categories', undefined, { credentials: 'include' }),
       ]);
       if (prodRes.ok) {
         const data = await safeJsonParse<{ success?: boolean; products?: Product[] }>(prodRes);
@@ -531,8 +586,8 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     async (
       customer: OrderCustomerDetails
     ): Promise<{ order: Order; whatsappUrl: string }> => {
-      // 1. Send order to backend /api/orders.php FIRST so it is saved in MySQL BEFORE WhatsApp opens
-      const response = await fetch('/api/orders.php', {
+      // 1. Send order to backend /api/orders FIRST so it is saved in database BEFORE WhatsApp opens
+      const response = await apiFetch('orders', undefined, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -602,7 +657,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
   const logoutCustomer = useCallback(async () => {
     try {
-      await fetch('/api/auth.php?action=logout', {
+      await apiFetch('auth', 'action=logout', {
         method: 'POST',
         credentials: 'include',
         headers: getAuthHeaders(),
