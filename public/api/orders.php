@@ -272,8 +272,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $hydrated = hydrateOrders($pdo, $fetchStmt->fetchAll());
 
         sendJson([
-            'success' => true,
-            'order'   => $hydrated[0] ?? null,
+            'success'  => true,
+            'message'  => 'Order created successfully',
+            'order_id' => $orderNumber,
+            'order'    => $hydrated[0] ?? null,
         ]);
     } catch (Throwable $e) {
         $pdo->rollBack();

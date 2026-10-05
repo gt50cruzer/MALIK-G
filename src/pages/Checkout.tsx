@@ -329,9 +329,16 @@ export const Checkout: React.FC = () => {
                       </p>
                     </div>
                   </div>
-                  <span className="font-mono-num text-xs sm:text-sm font-semibold text-[#F5F5F0] shrink-0">
-                    {formatPKR(item.product.price * item.quantity)}
-                  </span>
+                  <div className="text-right shrink-0">
+                    <span className="block font-mono-num text-xs sm:text-sm font-semibold text-[#F5F5F0]">
+                      {formatPKR(item.product.price * item.quantity)}
+                    </span>
+                    {item.product.oldPrice && item.product.oldPrice > item.product.price && (
+                      <span className="block font-mono-num text-[11px] text-[#A1A1AA] line-through">
+                        {formatPKR(item.product.oldPrice * item.quantity)}
+                      </span>
+                    )}
+                  </div>
                 </div>
               ))}
             </div>

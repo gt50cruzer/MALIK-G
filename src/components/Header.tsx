@@ -38,7 +38,7 @@ export const Header: React.FC = () => {
       <div className="bg-[#121214] border-b border-white/5 text-xs text-[#A1A1AA] py-2 px-4 sm:px-6 lg:px-8">
         <div className="max-w-[1440px] mx-auto flex flex-wrap items-center justify-between gap-2">
           <p className="tracking-wider uppercase font-medium text-[#F5F5F0] text-[11px] sm:text-xs">
-            MALIK G COLLECTION · SIALKOT, PAKISTAN · UP TO 20% OFF SELECTED ITEMS
+            MALIK G COLLECTION · SIALKOT, PAKISTAN · 20% OFF ALL PRODUCTS
           </p>
           <div className="flex items-center gap-4 text-[11px] sm:text-xs">
             <a
@@ -153,7 +153,7 @@ export const Header: React.FC = () => {
           </div>
         </nav>
 
-        {/* Zone 3: Primary Actions (Search, Wishlist, Cart) */}
+        {/* Zone 3: Primary Actions (Search, Wishlist, Sign In, Cart) */}
         <div className="flex items-center gap-2 sm:gap-4">
           <button
             type="button"
@@ -173,6 +173,14 @@ export const Header: React.FC = () => {
             {wishlist.length > 0 && (
               <span className="sr-only">({wishlist.length})</span>
             )}
+          </Link>
+
+          <Link
+            to="/admin/login.php"
+            className="hidden sm:inline-flex items-center px-2.5 py-1.5 text-xs font-medium uppercase tracking-wider text-[#A1A1AA] hover:text-[#D4AF37] transition-colors whitespace-nowrap focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[#D4AF37]"
+            aria-label="Owner Sign In"
+          >
+            Sign In
           </Link>
 
           <Link
@@ -205,6 +213,12 @@ export const Header: React.FC = () => {
             </NavLink>
           ))}
           <div className="pt-4 mt-4 border-t border-white/10 flex flex-col gap-2 text-xs text-[#A1A1AA] px-3">
+            <Link
+              to="/admin/login.php"
+              className="inline-flex items-center justify-between py-2 text-sm font-medium text-[#F5F5F0] hover:text-[#D4AF37] transition-colors border-b border-white/5 mb-1"
+            >
+              <span>Sign In</span>
+            </Link>
             <span>Location: {BRAND_INFO.location}</span>
             <a
               href={`tel:${BRAND_INFO.phoneRaw}`}

@@ -1,4 +1,5 @@
 import express from 'express';
+import http from 'http';
 import path from 'path';
 import fs from 'fs';
 import crypto from 'crypto';
@@ -7,6 +8,7 @@ import { INITIAL_PRODUCTS } from './src/data/products';
 import { Product, Order, OrderStatusType, OrderItemSnapshot } from './src/types';
 
 const app = express();
+const httpServer = http.createServer(app);
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
@@ -56,6 +58,26 @@ function loadDatabase(): DatabaseSchema {
       const raw = fs.readFileSync(DB_FILE, 'utf-8');
       const parsed = JSON.parse(raw) as DatabaseSchema;
       if (parsed && Array.isArray(parsed.products) && parsed.products.length > 0) {
+        // Ensure seed products reflect the current Original Price -> 20% OFF Offer Price calculation unless custom edited by Admin
+        let updated = false;
+        parsed.products = parsed.products.map((p) => {
+          const seed = INITIAL_PRODUCTS.find((sp) => sp.id === p.id);
+          if (seed && p.price === seed.originalPrice) {
+            updated = true;
+            return {
+              ...p,
+              price: seed.price,
+              oldPrice: seed.oldPrice,
+              originalPrice: seed.originalPrice,
+              offerPrice: seed.offerPrice,
+              discountPercent: seed.discountPercent,
+            };
+          }
+          return p;
+        });
+        if (updated) {
+          saveDatabase(parsed);
+        }
         return parsed;
       }
     }
@@ -167,7 +189,8 @@ app.all('/api/auth.php', (req, res) => {
     if (!email || !password) {
       return res.status(400).json({
         success: false,
-        error: 'Please enter both owner email and password.',
+        message: 'Please enter both email and password.',
+        error: 'Please enter both email and password.',
       });
     }
 
@@ -175,7 +198,8 @@ app.all('/api/auth.php', (req, res) => {
     if (!admin || !verifyPassword(password, admin.passwordSalt, admin.passwordHash)) {
       return res.status(401).json({
         success: false,
-        error: 'Invalid owner email or password.',
+        message: 'Invalid email or password.',
+        error: 'Invalid email or password.',
       });
     }
 
@@ -666,10 +690,34 @@ app.all('/api/orders.php', (req, res) => {
     db.orders.unshift(newOrder);
     saveDatabase(db);
 
-    return res.json({ success: true, order: newOrder });
+    return res.json({
+      success: true,
+      message: 'Order created successfully',
+      order_id: orderNumber,
+      order: newOrder,
+    });
   }
 
-  return res.status(405).json({ success: false, error: 'Method not allowed.' });
+  return res.status(405).json({ success: false, message: 'Method not allowed.', error: 'Method not allowed.' });
+});
+
+// ============================================================================
+// 4B. /api/upload.php
+// ============================================================================
+app.post('/api/upload.php', (req, res) => {
+  if (!getAdminSession(req)) {
+    return res.status(401).json({
+      success: false,
+      authenticated: false,
+      message: 'Unauthorized. Owner authentication required.',
+      error: 'Unauthorized. Owner authentication required.',
+    });
+  }
+  const dataUrl = String(req.body?.dataUrl || '');
+  if (dataUrl.startsWith('data:image/')) {
+    return res.json({ success: true, url: dataUrl });
+  }
+  return res.json({ success: true, url: '/uploads/category_shirts.jpg' });
 });
 
 // ============================================================================
@@ -785,9 +833,23 @@ app.get('/api/dashboard.php', (req, res) => {
 async function startServer() {
   const isProd = process.env.NODE_ENV === 'production';
 
+  // In the AI Studio preview environment, rewrite /admin/*.php to /admin so React Router renders the interactive Owner Admin Portal instead of serving raw .php files
+  app.use((req, _res, next) => {
+    if (req.path.startsWith('/admin/') && req.path.endsWith('.php')) {
+      req.url = req.path.replace(/\.php$/, '') + (req.url.includes('?') ? '?' + req.url.split('?')[1] : '');
+    }
+    next();
+  });
+
   if (!isProd) {
     const vite = await createViteServer({
-      server: { middlewareMode: true },
+      server: {
+        middlewareMode: true,
+        hmr:
+          process.env.DISABLE_HMR === 'true'
+            ? false
+            : { server: httpServer },
+      },
       appType: 'spa',
     });
     app.use(vite.middlewares);
@@ -800,7 +862,7 @@ async function startServer() {
   }
 
   const port = Number(process.env.PORT) || 3000;
-  app.listen(port, '0.0.0.0', () => {
+  httpServer.listen(port, '0.0.0.0', () => {
     console.log(`Malik G Collection Server listening on http://0.0.0.0:${port}`);
   });
 }

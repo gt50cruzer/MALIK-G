@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useLocation } from 'react-router-dom';
 import {
   LayoutDashboard,
   Package,
@@ -20,6 +20,8 @@ import {
   AlertCircle,
   ExternalLink,
   RefreshCw,
+  Users,
+  TrendingUp,
 } from 'lucide-react';
 import {
   Product,
@@ -28,15 +30,17 @@ import {
   DashboardStats,
 } from '../types';
 import { formatPKR, calculateDiscountPercentage } from '../data/products';
-import { useStore } from '../context/StoreContext';
+import { useStore, safeJsonParse } from '../context/StoreContext';
 import { SafeImage } from '../components/SafeImage';
 
 type AdminTab =
   | 'dashboard'
+  | 'orders'
   | 'products'
   | 'add-product'
-  | 'orders'
   | 'categories'
+  | 'customers'
+  | 'sales'
   | 'settings';
 
 const ORDER_STATUSES: OrderStatusType[] = [
@@ -97,7 +101,25 @@ export const AdminPanel: React.FC = () => {
   const [loginLoading, setLoginLoading] = useState(false);
 
   // Admin Navigation State
+  const location = useLocation();
   const [activeTab, setActiveTab] = useState<AdminTab>('dashboard');
+
+  useEffect(() => {
+    const p = location.pathname.replace(/\.php$/, '');
+    if (p.endsWith('/orders') || p.endsWith('/order-view')) {
+      setActiveTab('orders');
+    } else if (p.endsWith('/products')) {
+      setActiveTab('products');
+    } else if (p.endsWith('/product-add') || p.endsWith('/product-edit')) {
+      setActiveTab('add-product');
+    } else if (p.endsWith('/categories')) {
+      setActiveTab('categories');
+    } else if (p.endsWith('/settings') || p.endsWith('/change-password')) {
+      setActiveTab('settings');
+    } else {
+      setActiveTab('dashboard');
+    }
+  }, [location.pathname]);
 
   // Dashboard Data State
   const [stats, setStats] = useState<DashboardStats | null>(null);
@@ -168,7 +190,11 @@ export const AdminPanel: React.FC = () => {
       const res = await fetch('/api/auth.php?action=check', {
         credentials: 'include',
       });
-      const data = await res.json();
+      const data = await safeJsonParse<{
+        authenticated?: boolean;
+        admin?: { email?: string };
+        csrfToken?: string;
+      }>(res);
       if (data.authenticated) {
         setAuthenticated(true);
         setAdminEmail(data.admin?.email || '');
@@ -255,9 +281,15 @@ export const AdminPanel: React.FC = () => {
           password: loginPassword,
         }),
       });
-      const data = await res.json();
+      const data = await safeJsonParse<{
+        authenticated?: boolean;
+        error?: string;
+        message?: string;
+        admin?: { email?: string };
+        csrfToken?: string;
+      }>(res);
       if (!res.ok || !data.authenticated) {
-        setLoginError(data.error || 'Invalid owner email or password.');
+        setLoginError(data.message || data.error || 'Invalid email or password.');
       } else {
         setAuthenticated(true);
         setAdminEmail(data.admin?.email || loginEmail);
@@ -660,27 +692,24 @@ export const AdminPanel: React.FC = () => {
   if (authChecking) {
     return (
       <div className="min-h-screen bg-[#0B0B0C] flex items-center justify-center text-[#A1A1AA] text-sm">
-        Verifying owner session...
+        Loading...
       </div>
     );
   }
 
   // ============================================================================
-  // UNAUTHENTICATED VIEW -> SECURE OWNER ADMIN LOGIN
+  // UNAUTHENTICATED VIEW -> PROFESSIONAL SIGN IN PAGE
   // ============================================================================
   if (!authenticated) {
     return (
       <div className="min-h-screen bg-[#0B0B0C] flex flex-col justify-center items-center px-4 py-12">
         <div className="w-full max-w-md bg-[#121214] border border-white/15 p-8 sm:p-10 shadow-2xl space-y-6">
           <div className="text-center space-y-2 border-b border-white/10 pb-6">
-            <div className="w-12 h-12 mx-auto bg-[#D4AF37]/15 border border-[#D4AF37] flex items-center justify-center mb-3">
-              <Lock className="w-5 h-5 text-[#D4AF37]" />
-            </div>
-            <h1 className="font-display text-2xl sm:text-3xl font-bold tracking-[0.1em] text-[#D4AF37]">
+            <h1 className="font-display text-2xl sm:text-3xl font-bold tracking-[0.12em] text-[#D4AF37]">
               MALIK G COLLECTION
             </h1>
-            <p className="text-xs uppercase tracking-[0.2em] text-[#A1A1AA]">
-              Owner-Only Admin Portal
+            <p className="text-base font-medium text-[#F5F5F0]">
+              Sign In
             </p>
           </div>
 
@@ -694,36 +723,36 @@ export const AdminPanel: React.FC = () => {
           <form onSubmit={handleLogin} className="space-y-5">
             <div className="space-y-1.5">
               <label
-                htmlFor="admin-email"
+                htmlFor="signin-email"
                 className="block text-xs uppercase tracking-wider text-[#F5F5F0]"
               >
-                Owner Gmail / Email
+                Email / Gmail
               </label>
               <input
-                id="admin-email"
+                id="signin-email"
                 type="email"
                 required
                 value={loginEmail}
                 onChange={(e) => setLoginEmail(e.target.value)}
-                placeholder="owner@gmail.com"
+                placeholder="name@gmail.com"
                 className="w-full bg-[#18181B] border border-white/15 focus:border-[#D4AF37] px-4 py-3 text-sm text-[#F5F5F0] focus:outline-none"
               />
             </div>
 
             <div className="space-y-1.5">
               <label
-                htmlFor="admin-password"
+                htmlFor="signin-password"
                 className="block text-xs uppercase tracking-wider text-[#F5F5F0]"
               >
                 Password
               </label>
               <input
-                id="admin-password"
+                id="signin-password"
                 type="password"
                 required
                 value={loginPassword}
                 onChange={(e) => setLoginPassword(e.target.value)}
-                placeholder="••••••••••••"
+                placeholder="••••••••"
                 className="w-full bg-[#18181B] border border-white/15 focus:border-[#D4AF37] px-4 py-3 text-sm text-[#F5F5F0] focus:outline-none"
               />
             </div>
@@ -733,7 +762,7 @@ export const AdminPanel: React.FC = () => {
               disabled={loginLoading}
               className="w-full py-3.5 px-6 bg-[#D4AF37] hover:bg-[#e5c247] disabled:opacity-60 text-[#0B0B0C] text-xs font-bold uppercase tracking-[0.15em] transition-colors"
             >
-              {loginLoading ? 'AUTHENTICATING...' : 'SIGN IN TO ADMIN PANEL'}
+              {loginLoading ? 'SIGNING IN...' : 'SIGN IN'}
             </button>
           </form>
 
@@ -742,7 +771,7 @@ export const AdminPanel: React.FC = () => {
               to="/"
               className="text-xs text-[#A1A1AA] hover:text-[#D4AF37] uppercase tracking-wider"
             >
-              ← Return to Public Storefront
+              ← Return to Store
             </Link>
           </div>
         </div>
@@ -751,7 +780,7 @@ export const AdminPanel: React.FC = () => {
   }
 
   // ============================================================================
-  // AUTHENTICATED VIEW -> OWNER ADMIN PANEL
+  // AUTHENTICATED VIEW -> ADMIN PANEL
   // ============================================================================
   return (
     <div className="min-h-screen bg-[#0B0B0C] text-[#F5F5F0] flex flex-col lg:flex-row">
@@ -760,7 +789,7 @@ export const AdminPanel: React.FC = () => {
         <div>
           <div className="p-6 border-b border-white/10">
             <span className="block font-display text-xl font-bold tracking-[0.1em] text-[#D4AF37]">
-              MALIK G ADMIN
+              MALIK G COLLECTION
             </span>
             <span className="block text-[11px] text-[#A1A1AA] truncate mt-1">
               {adminEmail}
@@ -778,6 +807,8 @@ export const AdminPanel: React.FC = () => {
                 icon: PlusCircle,
               },
               { id: 'categories', label: 'Categories', icon: FolderTree },
+              { id: 'customers', label: 'Customers / Order Customers', icon: Users },
+              { id: 'sales', label: 'Sales', icon: TrendingUp },
               { id: 'settings', label: 'Change Password', icon: KeyRound },
             ].map((item) => {
               const Icon = item.icon;
@@ -838,7 +869,9 @@ export const AdminPanel: React.FC = () => {
                 {activeTab === 'add-product' &&
                   (editingProductId ? 'Edit Product' : 'Add New Product')}
                 {activeTab === 'categories' && 'Categories Management'}
-                {activeTab === 'settings' && 'Admin Security & Change Password'}
+                {activeTab === 'customers' && 'Customers / Order Customers'}
+                {activeTab === 'sales' && 'Sales & Revenue Report'}
+                {activeTab === 'settings' && 'Change Password'}
               </h1>
             </div>
 
@@ -1837,6 +1870,131 @@ export const AdminPanel: React.FC = () => {
                       </span>
                     </div>
                   ))}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* ================================================================ */}
+          {/* TAB 5B: CUSTOMERS / ORDER CUSTOMERS */}
+          {/* ================================================================ */}
+          {activeTab === 'customers' && (
+            <div className="bg-[#121214] border border-white/10 p-6 space-y-4">
+              <div className="flex items-center justify-between border-b border-white/10 pb-4">
+                <div>
+                  <h2 className="font-display text-xl font-bold text-[#F5F5F0]">
+                    Order Customers Directory
+                  </h2>
+                  <p className="text-xs text-[#A1A1AA] mt-1">
+                    Customers who have placed orders on Malik G Collection (no registration required).
+                  </p>
+                </div>
+              </div>
+              {adminOrders.length === 0 ? (
+                <p className="text-sm text-[#A1A1AA] py-8 text-center">
+                  No customer orders recorded yet.
+                </p>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left border-collapse text-xs sm:text-sm">
+                    <thead>
+                      <tr className="border-b border-white/10 text-[#A1A1AA] uppercase text-[11px]">
+                        <th className="py-3 px-3">Customer Name</th>
+                        <th className="py-3 px-3">Phone</th>
+                        <th className="py-3 px-3">Email / Gmail</th>
+                        <th className="py-3 px-3">City</th>
+                        <th className="py-3 px-3">Address</th>
+                        <th className="py-3 px-3">Latest Order</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-white/10">
+                      {adminOrders.map((ord) => (
+                        <tr key={ord.orderNumber} className="hover:bg-white/5">
+                          <td className="py-3 px-3 font-medium text-[#F5F5F0]">
+                            {ord.customer.fullName}
+                          </td>
+                          <td className="py-3 px-3 font-mono-num text-[#D4AF37]">
+                            {ord.customer.phone}
+                          </td>
+                          <td className="py-3 px-3 text-[#A1A1AA]">
+                            {ord.customer.email}
+                          </td>
+                          <td className="py-3 px-3 text-[#F5F5F0]">
+                            {ord.customer.city}
+                          </td>
+                          <td className="py-3 px-3 text-xs text-[#A1A1AA] max-w-xs truncate">
+                            {ord.customer.address}
+                          </td>
+                          <td className="py-3 px-3 font-mono-num text-xs">
+                            <button
+                              type="button"
+                              onClick={() => setSelectedOrder(ord)}
+                              className="text-[#D4AF37] hover:underline font-bold"
+                            >
+                              {ord.orderNumber} ({formatPKR(ord.total)})
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* ================================================================ */}
+          {/* TAB 5C: SALES & REVENUE BREAKDOWN */}
+          {/* ================================================================ */}
+          {activeTab === 'sales' && stats && (
+            <div className="space-y-6">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                {[
+                  { label: 'Today', data: stats.periods.today },
+                  { label: 'This Week', data: stats.periods.thisWeek },
+                  { label: 'This Month', data: stats.periods.thisMonth },
+                  { label: 'All Time', data: stats.periods.allTime },
+                ].map((period) => (
+                  <div
+                    key={period.label}
+                    className="bg-[#121214] border border-white/10 p-5 space-y-1"
+                  >
+                    <span className="text-xs uppercase tracking-wider text-[#D4AF37]">
+                      {period.label}
+                    </span>
+                    <div className="font-mono-num text-2xl font-bold text-[#F5F5F0]">
+                      {formatPKR(period.data.sales)}
+                    </div>
+                    <span className="block text-xs text-[#A1A1AA] font-mono-num">
+                      {period.data.orders} Orders
+                    </span>
+                  </div>
+                ))}
+              </div>
+
+              <div className="bg-[#121214] border border-white/10 p-6 space-y-4">
+                <h2 className="font-display text-xl font-bold text-[#F5F5F0]">
+                  Revenue Breakdown by Status
+                </h2>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 text-sm">
+                  <div className="p-4 bg-[#18181B] border border-white/10">
+                    <span className="text-xs uppercase text-[#A1A1AA]">Total Active Revenue</span>
+                    <p className="font-mono-num text-xl font-bold text-[#D4AF37] mt-1">
+                      {formatPKR(stats.totalRevenue)}
+                    </p>
+                  </div>
+                  <div className="p-4 bg-[#18181B] border border-white/10">
+                    <span className="text-xs uppercase text-[#A1A1AA]">Delivered Revenue</span>
+                    <p className="font-mono-num text-xl font-bold text-emerald-400 mt-1">
+                      {formatPKR(stats.deliveredRevenue)}
+                    </p>
+                  </div>
+                  <div className="p-4 bg-[#18181B] border border-white/10">
+                    <span className="text-xs uppercase text-[#A1A1AA]">Pending Order Value</span>
+                    <p className="font-mono-num text-xl font-bold text-amber-400 mt-1">
+                      {formatPKR(stats.pendingOrderValue)}
+                    </p>
+                  </div>
                 </div>
               </div>
             </div>

@@ -130,9 +130,16 @@ export const QuickViewModal: React.FC = () => {
                 {formatPKR(quickViewProduct.price)}
               </span>
               {quickViewProduct.oldPrice && (
-                <span className="text-sm text-[#A1A1AA] line-through">
-                  {formatPKR(quickViewProduct.oldPrice)}
-                </span>
+                <>
+                  <span className="text-sm text-[#A1A1AA] line-through">
+                    {formatPKR(quickViewProduct.oldPrice)}
+                  </span>
+                  {discount && (
+                    <span className="text-xs font-bold text-[#D4AF37]">
+                      {discount}% OFF
+                    </span>
+                  )}
+                </>
               )}
             </div>
 

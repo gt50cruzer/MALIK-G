@@ -2,9 +2,11 @@
   RewriteEngine On
   RewriteBase /
 
-  # Allow direct access to /api/ PHP endpoints and /uploads/ images
+  # Allow direct access to /api/ PHP endpoints, /admin/ PHP scripts, and /uploads/ images
   RewriteRule ^api/ - [L]
   RewriteRule ^uploads/ - [L]
+  RewriteCond %{REQUEST_URI} ^/admin/.*\.php$ [NC]
+  RewriteRule ^ - [L]
 
   # Block direct web access to /config/
   RewriteRule ^config/ - [F,L]

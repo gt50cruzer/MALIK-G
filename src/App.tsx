@@ -39,7 +39,10 @@ const ScrollToTopAndSEO: React.FC = () => {
       '/order-success': 'Order Confirmed | Malik G Collection',
       '/about': 'About Malik G Collection | Sialkot, Pakistan',
       '/contact': 'Contact Malik G Collection | 0321 7126828',
-      '/admin': 'Owner Admin Portal | Malik G Collection',
+      '/admin': 'Malik G Collection',
+      '/admin/login': 'Sign In | Malik G Collection',
+      '/admin/login.php': 'Sign In | Malik G Collection',
+      '/signin': 'Sign In | Malik G Collection',
     };
 
     document.title =
@@ -78,11 +81,12 @@ const NotFound: React.FC = () => (
 
 const AppShell: React.FC = () => {
   const { pathname } = useLocation();
-  const isAdminRoute = pathname.startsWith('/admin');
+  const isAdminRoute = pathname.startsWith('/admin') || pathname === '/signin';
 
   if (isAdminRoute) {
     return (
       <Routes>
+        <Route path="/signin" element={<AdminPanel />} />
         <Route path="/admin/*" element={<AdminPanel />} />
       </Routes>
     );

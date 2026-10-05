@@ -112,9 +112,14 @@ export const Cart: React.FC = () => {
                         {formatPKR(item.product.price)}
                       </span>
                       {item.product.oldPrice && (
-                        <span className="text-xs text-[#A1A1AA] line-through">
-                          {formatPKR(item.product.oldPrice)}
-                        </span>
+                        <>
+                          <span className="text-xs text-[#A1A1AA] line-through">
+                            {formatPKR(item.product.oldPrice)}
+                          </span>
+                          <span className="text-[11px] font-bold text-[#D4AF37]">
+                            20% OFF
+                          </span>
+                        </>
                       )}
                     </div>
                   </div>

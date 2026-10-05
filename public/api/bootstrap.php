@@ -5,6 +5,26 @@
 
 declare(strict_types=1);
 
+// Suppress any accidental PHP notices/warnings from corrupting JSON output
+ini_set('display_errors', '0');
+ini_set('log_errors', '1');
+error_reporting(E_ALL);
+ob_start();
+
+set_exception_handler(function (Throwable $e): void {
+    while (ob_get_level() > 0) {
+        ob_end_clean();
+    }
+    http_response_code(500);
+    header('Content-Type: application/json; charset=utf-8');
+    echo json_encode([
+        'success' => false,
+        'message' => 'Internal server error.',
+        'error'   => 'Internal server error.',
+    ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+    exit;
+});
+
 require_once __DIR__ . '/../config/database.php';
 
 // Configure secure PHP session cookies
@@ -29,7 +49,14 @@ header('X-Frame-Options: SAMEORIGIN');
 
 function sendJson(array $payload, int $statusCode = 200): void
 {
+    while (ob_get_level() > 0) {
+        ob_end_clean();
+    }
+    if (isset($payload['error']) && !isset($payload['message'])) {
+        $payload['message'] = $payload['error'];
+    }
     http_response_code($statusCode);
+    header('Content-Type: application/json; charset=utf-8');
     echo json_encode($payload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
     exit;
 }

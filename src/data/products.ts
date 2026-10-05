@@ -704,13 +704,26 @@ export const PRODUCTS: Product[] = [
 ];
 
 export const INITIAL_PRODUCTS: Product[] = PRODUCTS.map((p) => {
-  const computedOldPrice = p.oldPrice || Math.round(p.price / 0.8);
+  // Original Price = current original price (p.price from base catalog, e.g. Rs. 2,999 for Premium Black Oxford Shirt)
+  // Discount = 20%
+  // Offer Price = Math.round(originalPrice * 0.80) (e.g. Rs. 2,399)
+  const originalPrice = p.originalPrice || p.price;
+  const offerPrice =
+    p.offerPrice !== undefined && p.offerPrice !== null
+      ? p.offerPrice
+      : Math.round(originalPrice * 0.8);
+  const discountPercent =
+    offerPrice < originalPrice
+      ? Math.round(((originalPrice - offerPrice) / originalPrice) * 100)
+      : 0;
+
   return {
     ...p,
-    oldPrice: computedOldPrice,
-    originalPrice: computedOldPrice,
-    offerPrice: p.price,
-    discountPercent: 20,
+    price: offerPrice,
+    oldPrice: offerPrice < originalPrice ? originalPrice : undefined,
+    originalPrice,
+    offerPrice,
+    discountPercent,
     published: p.published !== undefined ? p.published : true,
   };
 });

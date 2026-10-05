@@ -83,6 +83,18 @@ function loadFromStorage<T>(key: string, fallback: T): T {
   }
 }
 
+export async function safeJsonParse<T = Record<string, unknown>>(response: Response): Promise<T> {
+  const rawText = await response.text();
+  if (!rawText || !rawText.trim()) {
+    throw new Error(`Server returned an empty response (HTTP ${response.status}).`);
+  }
+  try {
+    return JSON.parse(rawText) as T;
+  } catch {
+    throw new Error(`Invalid JSON response from server (HTTP ${response.status}).`);
+  }
+}
+
 export function buildWhatsAppOrderMessage(order: Order): string {
   const origin = typeof window !== 'undefined' ? window.location.origin : '';
   const lines: string[] = [
@@ -175,7 +187,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         fetch('/api/categories.php', { credentials: 'include' }),
       ]);
       if (prodRes.ok) {
-        const data = await prodRes.json();
+        const data = await safeJsonParse<{ success?: boolean; products?: Product[] }>(prodRes);
         if (data.success && Array.isArray(data.products) && data.products.length > 0) {
           // Map any relative /uploads/category_*.jpg paths to bundled high-res fallback if needed
           const hydrated: Product[] = data.products.map((p: Product) => {
@@ -191,10 +203,20 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
             };
           });
           setProducts(hydrated);
+          // Sync any existing cart items with the current product prices (Original Price -> 20% OFF Offer Price)
+          setCart((prevCart) =>
+            prevCart.map((item) => {
+              const match = hydrated.find((hp) => hp.id === item.product.id);
+              return match ? { ...item, product: match } : item;
+            })
+          );
         }
       }
       if (catRes.ok) {
-        const catData = await catRes.json();
+        const catData = await safeJsonParse<{
+          success?: boolean;
+          categories?: { name: string }[];
+        }>(catRes);
         if (catData.success && Array.isArray(catData.categories)) {
           setCategories(catData.categories.map((c: { name: string }) => c.name));
         }
@@ -421,7 +443,10 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       // 1. Send order to backend /api/orders.php FIRST so it is saved in MySQL BEFORE WhatsApp opens
       const response = await fetch('/api/orders.php', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          Accept: 'application/json',
+        },
         credentials: 'include',
         body: JSON.stringify({
           customer,
@@ -429,13 +454,23 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         }),
       });
 
-      const data = await response.json();
+      const data = await safeJsonParse<{
+        success?: boolean;
+        message?: string;
+        error?: string;
+        order_id?: string;
+        order?: Order;
+      }>(response);
+
       if (!response.ok || !data.success || !data.order) {
-        throw new Error(data.error || 'Could not save order. Please check your details.');
+        throw new Error(
+          data.message || data.error || 'Unable to create order. Please verify your information.'
+        );
       }
 
       const savedOrder: Order = {
         ...data.order,
+        orderNumber: data.order.orderNumber || data.order_id || 'MGC-000000',
         items: [...cart],
       };
 

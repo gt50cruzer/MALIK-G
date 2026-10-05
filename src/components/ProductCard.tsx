@@ -131,8 +131,8 @@ export const ProductCard: React.FC<ProductCardProps> = ({ product, showNewBadge 
             )}
           </div>
           {discountPercent && (
-            <span className="text-[11px] font-mono-num text-[#D4AF37]">
-              -{discountPercent}%
+            <span className="text-[11px] font-mono-num font-semibold text-[#D4AF37]">
+              {discountPercent}% OFF
             </span>
           )}
         </div>

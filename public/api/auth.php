@@ -41,7 +41,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $action === 'login') {
     $password = (string)($body['password'] ?? '');
 
     if ($email === '' || $password === '') {
-        sendJson(['success' => false, 'error' => 'Please enter both owner email and password.'], 400);
+        sendJson(['success' => false, 'error' => 'Please enter both email and password.'], 400);
     }
 
     $stmt = $pdo->prepare('SELECT id, email, password_hash FROM admins WHERE LOWER(email) = :email LIMIT 1');
@@ -49,7 +49,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $action === 'login') {
     $admin = $stmt->fetch();
 
     if (!$admin || !password_verify($password, $admin['password_hash'])) {
-        sendJson(['success' => false, 'error' => 'Invalid owner email or password.'], 401);
+        sendJson(['success' => false, 'error' => 'Invalid email or password.'], 401);
     }
 
     session_regenerate_id(true);
