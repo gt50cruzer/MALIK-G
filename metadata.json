@@ -1,0 +1,6 @@
+{
+  "name": "Malik G Collection | Fashion, Shoes, Watches & Perfumes",
+  "description": "Shop stylish clothing, shoes, watches and perfumes at Malik G Collection in Sialkot, Pakistan.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
