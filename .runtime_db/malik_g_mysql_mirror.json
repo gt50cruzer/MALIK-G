@@ -2,10 +2,11 @@
   "admins": [
     {
       "id": 1,
-      "email": "abdurrehmanadil91@gmail.com",
-      "passwordSalt": "4e3a8cdec5331940b328c0810fa38f29",
-      "passwordHash": "1855ff750abe910de045d31670abd46504438ca93b94ef79a4819fb5bfeb9fbe245968e41130066730e061bbf41ef523ffd3d0e74263d06a578e11478d854c69",
-      "updatedAt": "2026-10-05T08:37:27.518Z"
+      "email": "malikg@gmail.com",
+      "role": "admin",
+      "passwordSalt": "f007a1271e3e6dbce93c9e0c78d5dba0",
+      "passwordHash": "3a731195b26ed80720d4b2d56453e6d154efce89a5027ccbe4087127aea2370c4e2e7c5300b36582bc0eed67cd34230fdfde9eb139828547fc290d6875250334",
+      "updatedAt": "2026-10-05T15:05:27.746Z"
     }
   ],
   "categories": [
@@ -1521,5 +1522,62 @@
       "total": 6999,
       "status": "Pending"
     }
-  ]
+  ],
+  "customers": [
+    {
+      "id": 1,
+      "fullName": "Ali Khan",
+      "email": "ali.khan.customer@example.com",
+      "role": "customer",
+      "passwordSalt": "201611656827d9d56725d664222d6d09",
+      "passwordHash": "5c0dca4abdae13863de84ad2129880e57f452e184e5c994802f25031e4319a2225325bc8726fbc4b5bde411d4a89cafecb8e7add0465dde7d447c387f5a4d63c",
+      "createdAt": "2026-10-05T14:15:27.465Z"
+    },
+    {
+      "id": 2,
+      "fullName": "Usman Malik",
+      "email": "usman.malik.test@gmail.com",
+      "role": "customer",
+      "passwordSalt": "6eec2a5fce756ce2e7db263a2a6a4e7d",
+      "passwordHash": "7ef570e4333e3f45e54bfbc432bfed5ca3103a9d3fb57a70c2ba03566554fd05ea91c7805db954da7aa55917b3f633d611b702bb162d92f8888d668380ca4d96",
+      "createdAt": "2026-10-05T14:21:19.174Z"
+    },
+    {
+      "id": 3,
+      "fullName": "Test Customer",
+      "email": "mgc.test.customer2026@gmail.com",
+      "role": "customer",
+      "passwordSalt": "f40122e532ed73048c2604b198e7ff12",
+      "passwordHash": "2eea209291824d7dbbbdea9331881dce2656aa4e312f6a33ec13662104c35e46309347b63e341eb004b46df9a261339075fbc2d6145db180a68beca89ee5d877",
+      "createdAt": "2026-10-05T14:24:18.006Z"
+    },
+    {
+      "id": 4,
+      "fullName": "Ali Test User",
+      "email": "mgc.ali.test2026@gmail.com",
+      "role": "customer",
+      "passwordSalt": "307ada883d9ef48f77d31277f7a347ae",
+      "passwordHash": "4826259aaa16196755b92c4ed3ee76304d255338eb30c645d3ddd6080e1f40ce3639b5bcad8f9c3098d6b3f8bf3e3b3c9f2fb03b3310ae2951517446dbda02d4",
+      "createdAt": "2026-10-05T14:52:36.300Z"
+    },
+    {
+      "id": 5,
+      "fullName": "Usman Malik",
+      "email": "usman.test.1791212727756@example.com",
+      "role": "customer",
+      "passwordSalt": "288a3df508c1d3a919587684eff8f210",
+      "passwordHash": "1c7cbdeb9d2a584ad62edc00552059f5a3e50997e10c580cf56556691d42276896ea91e0d2faffcb3d609e713b8f62b190a50fa2e0499fca708f7787abdc7aa1",
+      "createdAt": "2026-10-05T15:05:27.809Z"
+    }
+  ],
+  "sessions": {
+    "f1eec66dc941b4b8c504653a3b49087baf501c8d18dd366a": {
+      "userId": 5,
+      "fullName": "Usman Malik",
+      "email": "usman.test.1791212727756@example.com",
+      "role": "customer",
+      "csrfToken": "0b57ca90218ee0d6e5f7487af917b697553985199af6b990",
+      "lastActivity": 1791212727809
+    }
+  }
 }

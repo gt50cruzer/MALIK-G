@@ -22,9 +22,20 @@ const DB_FILE = path.join(DATA_DIR, 'malik_g_mysql_mirror.json');
 interface AdminAccount {
   id: number;
   email: string;
+  role: 'admin';
   passwordSalt: string;
   passwordHash: string;
   updatedAt: string;
+}
+
+interface CustomerAccount {
+  id: number;
+  fullName: string;
+  email: string;
+  role: 'customer';
+  passwordSalt: string;
+  passwordHash: string;
+  createdAt: string;
 }
 
 interface CategoryRecord {
@@ -34,12 +45,28 @@ interface CategoryRecord {
   subtitle: string;
 }
 
+// Session store for active sessions (both admin and customer, strictly separated by role)
+interface SessionData {
+  userId: number;
+  adminId?: number;
+  fullName?: string;
+  email: string;
+  role: 'admin' | 'customer';
+  csrfToken: string;
+  lastActivity: number;
+}
+
 interface DatabaseSchema {
   admins: AdminAccount[];
+  customers?: CustomerAccount[];
+  sessions?: Record<string, SessionData>;
   categories: CategoryRecord[];
   products: Product[];
   orders: Order[];
 }
+
+const OWNER_ADMIN_EMAIL = 'malikg@gmail.com';
+const INITIAL_OWNER_PASSWORD = 'malikgcollection';
 
 function hashPassword(password: string, salt?: string): { salt: string; hash: string } {
   const actualSalt = salt || crypto.randomBytes(16).toString('hex');
@@ -52,14 +79,82 @@ function verifyPassword(password: string, salt: string, storedHash: string): boo
   return crypto.timingSafeEqual(Buffer.from(hash, 'hex'), Buffer.from(storedHash, 'hex'));
 }
 
+function ensureAuthorizedOwnerAdmin(admins: AdminAccount[]): { admins: AdminAccount[]; changed: boolean } {
+  let changed = false;
+  const normalizedList: AdminAccount[] = Array.isArray(admins) ? [...admins] : [];
+
+  // Deduplicate any existing records for malikg@gmail.com
+  const matchingIndices: number[] = [];
+  normalizedList.forEach((a, idx) => {
+    if (a.email && a.email.trim().toLowerCase() === OWNER_ADMIN_EMAIL) {
+      matchingIndices.push(idx);
+    }
+  });
+
+  if (matchingIndices.length > 1) {
+    // Keep only the first matching record
+    for (let i = matchingIndices.length - 1; i >= 1; i--) {
+      normalizedList.splice(matchingIndices[i], 1);
+    }
+    changed = true;
+  }
+
+  const ownerIdx = normalizedList.findIndex(
+    (a) => a.email && a.email.trim().toLowerCase() === OWNER_ADMIN_EMAIL
+  );
+
+  if (ownerIdx === -1) {
+    const initialPass = hashPassword(INITIAL_OWNER_PASSWORD);
+    const ownerAccount: AdminAccount = {
+      id: 1,
+      email: OWNER_ADMIN_EMAIL,
+      role: 'admin',
+      passwordSalt: initialPass.salt,
+      passwordHash: initialPass.hash,
+      updatedAt: new Date().toISOString(),
+    };
+    return { admins: [ownerAccount], changed: true };
+  }
+
+  const existing = normalizedList[ownerIdx];
+  if (existing.role !== 'admin' || existing.email !== OWNER_ADMIN_EMAIL) {
+    normalizedList[ownerIdx] = {
+      ...existing,
+      email: OWNER_ADMIN_EMAIL,
+      role: 'admin',
+    };
+    changed = true;
+  }
+
+  // Ensure only the single authorized owner admin record is kept if any legacy placeholder existed
+  if (normalizedList.length > 1) {
+    return { admins: [normalizedList[ownerIdx]], changed: true };
+  }
+
+  return { admins: normalizedList, changed };
+}
+
 function loadDatabase(): DatabaseSchema {
   try {
     if (fs.existsSync(DB_FILE)) {
       const raw = fs.readFileSync(DB_FILE, 'utf-8');
       const parsed = JSON.parse(raw) as DatabaseSchema;
       if (parsed && Array.isArray(parsed.products) && parsed.products.length > 0) {
-        // Ensure seed products reflect the current Original Price -> 20% OFF Offer Price calculation unless custom edited by Admin
         let updated = false;
+        if (!Array.isArray(parsed.customers)) {
+          parsed.customers = [];
+          updated = true;
+        }
+        if (!parsed.sessions || typeof parsed.sessions !== 'object') {
+          parsed.sessions = {};
+          updated = true;
+        }
+        const ensuredAdmins = ensureAuthorizedOwnerAdmin(parsed.admins || []);
+        if (ensuredAdmins.changed) {
+          parsed.admins = ensuredAdmins.admins;
+          updated = true;
+        }
+        // Ensure seed products reflect the current Original Price -> 20% OFF Offer Price calculation unless custom edited by Admin
         parsed.products = parsed.products.map((p) => {
           const seed = INITIAL_PRODUCTS.find((sp) => sp.id === p.id);
           if (seed && p.price === seed.originalPrice) {
@@ -85,17 +180,19 @@ function loadDatabase(): DatabaseSchema {
     // initialize fresh
   }
 
-  const defaultPass = hashPassword('MalikG@2026');
+  const defaultPass = hashPassword(INITIAL_OWNER_PASSWORD);
   const initialDb: DatabaseSchema = {
     admins: [
       {
         id: 1,
-        email: 'abdurrehmanadil91@gmail.com',
+        email: OWNER_ADMIN_EMAIL,
+        role: 'admin',
         passwordSalt: defaultPass.salt,
         passwordHash: defaultPass.hash,
         updatedAt: new Date().toISOString(),
       },
     ],
+    customers: [],
     categories: [
       { id: 1, name: 'Shirts', slug: 'shirts', subtitle: 'Smart styles for every occasion' },
       { id: 2, name: 'Pants', slug: 'pants', subtitle: 'Comfort meets modern style' },
@@ -120,16 +217,7 @@ function saveDatabase(db: DatabaseSchema): void {
   fs.writeFileSync(DB_FILE, JSON.stringify(db, null, 2), 'utf-8');
 }
 
-// Session store for active owner sessions
-interface SessionData {
-  adminId: number;
-  email: string;
-  csrfToken: string;
-  lastActivity: number;
-}
-
-const SESSIONS = new Map<string, SessionData>();
-const SESSION_TIMEOUT_MS = 2 * 60 * 60 * 1000; // 2 hours
+const SESSION_TIMEOUT_MS = 24 * 60 * 60 * 1000; // 24 hours
 
 function parseCookies(cookieHeader?: string): Record<string, string> {
   const list: Record<string, string> = {};
@@ -144,17 +232,76 @@ function parseCookies(cookieHeader?: string): Record<string, string> {
   return list;
 }
 
-function getAdminSession(req: express.Request): SessionData | null {
+function extractSessionId(req: express.Request): string | null {
+  const authHeader = req.headers.authorization;
+  if (authHeader && authHeader.startsWith('Bearer ')) {
+    const token = authHeader.slice(7).trim();
+    if (token) return token;
+  }
+  const customToken = req.headers['x-session-token'];
+  if (typeof customToken === 'string' && customToken.trim()) {
+    return customToken.trim();
+  }
   const cookies = parseCookies(req.headers.cookie);
-  const sid = cookies['MGC_SESSID'];
+  if (cookies['MGC_SESSID']) {
+    return cookies['MGC_SESSID'];
+  }
+  return null;
+}
+
+function buildSessionCookieHeader(req: express.Request, sid: string, maxAgeSeconds: number): string {
+  const proto = (req.headers['x-forwarded-proto'] as string) || req.protocol || '';
+  const host = (req.headers.host || '').toLowerCase();
+  const isLocalhost = host.startsWith('localhost') || host.startsWith('127.0.0.1');
+  const isHttps = proto.includes('https') || !isLocalhost;
+
+  if (maxAgeSeconds <= 0) {
+    if (isHttps) {
+      return 'MGC_SESSID=; Path=/; HttpOnly; Secure; SameSite=None; Partitioned; Max-Age=0';
+    }
+    return 'MGC_SESSID=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0';
+  }
+
+  if (isHttps) {
+    return `MGC_SESSID=${sid}; Path=/; HttpOnly; Secure; SameSite=None; Partitioned; Max-Age=${maxAgeSeconds}`;
+  }
+  return `MGC_SESSID=${sid}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${maxAgeSeconds}`;
+}
+
+function saveSession(sid: string, sessionData: SessionData): void {
+  const db = loadDatabase();
+  if (!db.sessions || typeof db.sessions !== 'object') {
+    db.sessions = {};
+  }
+  db.sessions[sid] = sessionData;
+  saveDatabase(db);
+}
+
+function deleteSession(sid: string): void {
+  const db = loadDatabase();
+  if (db.sessions && db.sessions[sid]) {
+    delete db.sessions[sid];
+    saveDatabase(db);
+  }
+}
+
+function getActiveSession(req: express.Request): SessionData | null {
+  const sid = extractSessionId(req);
   if (!sid) return null;
-  const sess = SESSIONS.get(sid);
+  const db = loadDatabase();
+  const sess = db.sessions?.[sid];
   if (!sess) return null;
   if (Date.now() - sess.lastActivity > SESSION_TIMEOUT_MS) {
-    SESSIONS.delete(sid);
+    deleteSession(sid);
     return null;
   }
   sess.lastActivity = Date.now();
+  return sess;
+}
+
+function getAdminSession(req: express.Request): SessionData | null {
+  const sess = getActiveSession(req);
+  if (!sess || sess.role !== 'admin') return null;
   return sess;
 }
 
@@ -164,21 +311,152 @@ function getAdminSession(req: express.Request): SessionData | null {
 app.all('/api/auth.php', (req, res) => {
   const action = (req.query.action as string) || '';
   const db = loadDatabase();
+  if (!Array.isArray(db.customers)) {
+    db.customers = [];
+  }
 
   if (req.method === 'GET' && action === 'check') {
-    const sess = getAdminSession(req);
-    if (sess) {
+    const sess = getActiveSession(req);
+    const activeSid = extractSessionId(req) || '';
+    if (sess && sess.role === 'admin') {
       return res.json({
         success: true,
         authenticated: true,
-        admin: { id: sess.adminId, email: sess.email },
+        role: 'admin',
+        admin: { id: sess.userId, email: sess.email },
+        user: { id: sess.userId, email: sess.email, role: 'admin' },
         csrfToken: sess.csrfToken,
+        sessionToken: activeSid,
+      });
+    }
+    if (sess && sess.role === 'customer') {
+      return res.json({
+        success: true,
+        authenticated: false,
+        customerAuthenticated: true,
+        role: 'customer',
+        user: {
+          id: sess.userId,
+          fullName: sess.fullName || '',
+          email: sess.email,
+          role: 'customer',
+        },
+        csrfToken: sess.csrfToken,
+        sessionToken: activeSid,
       });
     }
     return res.json({
       success: true,
       authenticated: false,
+      customerAuthenticated: false,
+      role: null,
       csrfToken: '',
+    });
+  }
+
+  if (req.method === 'POST' && action === 'register') {
+    const fullName = String(req.body?.fullName || '').trim();
+    const email = String(req.body?.email || '').trim().toLowerCase();
+    const password = String(req.body?.password || '');
+    const confirmPassword = String(req.body?.confirmPassword || '');
+
+    if (!fullName) {
+      return res.status(400).json({
+        success: false,
+        message: 'Please enter your full name.',
+        error: 'Please enter your full name.',
+      });
+    }
+
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!email || !emailRegex.test(email)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Please enter a valid email address.',
+        error: 'Please enter a valid email address.',
+      });
+    }
+
+    if (!password) {
+      return res.status(400).json({
+        success: false,
+        message: 'Please enter a password.',
+        error: 'Please enter a password.',
+      });
+    }
+
+    if (password.length < 6) {
+      return res.status(400).json({
+        success: false,
+        message: 'Password must be at least 6 characters long.',
+        error: 'Password must be at least 6 characters long.',
+      });
+    }
+
+    if (password !== confirmPassword) {
+      return res.status(400).json({
+        success: false,
+        message: 'Passwords do not match.',
+        error: 'Passwords do not match.',
+      });
+    }
+
+    const emailExistsInCustomers = db.customers.some((c) => c.email.toLowerCase() === email);
+    const emailExistsInAdmins = db.admins.some((a) => a.email.toLowerCase() === email);
+
+    if (emailExistsInCustomers || emailExistsInAdmins) {
+      return res.status(409).json({
+        success: false,
+        message: 'An account with this email already exists.',
+        error: 'An account with this email already exists.',
+      });
+    }
+
+    const passData = hashPassword(password);
+    const nextId =
+      db.customers.length > 0 ? Math.max(...db.customers.map((c) => c.id)) + 1 : 1;
+
+    const newCustomer: CustomerAccount = {
+      id: nextId,
+      fullName,
+      email,
+      role: 'customer',
+      passwordSalt: passData.salt,
+      passwordHash: passData.hash,
+      createdAt: new Date().toISOString(),
+    };
+
+    db.customers.push(newCustomer);
+    saveDatabase(db);
+
+    // Automatically sign the customer in with role='customer' (never admin)
+    const sid = crypto.randomBytes(24).toString('hex');
+    const csrfToken = crypto.randomBytes(24).toString('hex');
+    saveSession(sid, {
+      userId: newCustomer.id,
+      fullName: newCustomer.fullName,
+      email: newCustomer.email,
+      role: 'customer',
+      csrfToken,
+      lastActivity: Date.now(),
+    });
+
+    res.setHeader('Set-Cookie', buildSessionCookieHeader(req, sid, 86400));
+
+    return res.json({
+      success: true,
+      message: 'Account created successfully.',
+      authenticated: false,
+      customerAuthenticated: true,
+      role: 'customer',
+      user: {
+        id: newCustomer.id,
+        fullName: newCustomer.fullName,
+        email: newCustomer.email,
+        role: 'customer',
+      },
+      csrfToken,
+      sessionToken: sid,
     });
   }
 
@@ -194,44 +472,79 @@ app.all('/api/auth.php', (req, res) => {
       });
     }
 
+    // 1. Check if credentials belong to an authorized admin
     const admin = db.admins.find((a) => a.email.toLowerCase() === email);
-    if (!admin || !verifyPassword(password, admin.passwordSalt, admin.passwordHash)) {
-      return res.status(401).json({
-        success: false,
-        message: 'Invalid email or password.',
-        error: 'Invalid email or password.',
+    if (admin && verifyPassword(password, admin.passwordSalt, admin.passwordHash)) {
+      const sid = crypto.randomBytes(24).toString('hex');
+      const csrfToken = crypto.randomBytes(24).toString('hex');
+      saveSession(sid, {
+        userId: admin.id,
+        adminId: admin.id,
+        email: admin.email,
+        role: 'admin',
+        csrfToken,
+        lastActivity: Date.now(),
+      });
+
+      res.setHeader('Set-Cookie', buildSessionCookieHeader(req, sid, 86400));
+
+      return res.json({
+        success: true,
+        authenticated: true,
+        role: 'admin',
+        admin: { id: admin.id, email: admin.email },
+        user: { id: admin.id, email: admin.email, role: 'admin' },
+        csrfToken,
+        sessionToken: sid,
       });
     }
 
-    const sid = crypto.randomBytes(24).toString('hex');
-    const csrfToken = crypto.randomBytes(24).toString('hex');
-    SESSIONS.set(sid, {
-      adminId: admin.id,
-      email: admin.email,
-      csrfToken,
-      lastActivity: Date.now(),
-    });
+    // 2. Check if credentials belong to a registered customer
+    const customer = db.customers.find((c) => c.email.toLowerCase() === email);
+    if (customer && verifyPassword(password, customer.passwordSalt, customer.passwordHash)) {
+      const sid = crypto.randomBytes(24).toString('hex');
+      const csrfToken = crypto.randomBytes(24).toString('hex');
+      saveSession(sid, {
+        userId: customer.id,
+        fullName: customer.fullName,
+        email: customer.email,
+        role: 'customer',
+        csrfToken,
+        lastActivity: Date.now(),
+      });
 
-    res.setHeader(
-      'Set-Cookie',
-      `MGC_SESSID=${sid}; Path=/; HttpOnly; SameSite=Lax; Max-Age=7200`
-    );
+      res.setHeader('Set-Cookie', buildSessionCookieHeader(req, sid, 86400));
 
-    return res.json({
-      success: true,
-      authenticated: true,
-      admin: { id: admin.id, email: admin.email },
-      csrfToken,
+      return res.json({
+        success: true,
+        authenticated: false,
+        customerAuthenticated: true,
+        role: 'customer',
+        user: {
+          id: customer.id,
+          fullName: customer.fullName,
+          email: customer.email,
+          role: 'customer',
+        },
+        csrfToken,
+        sessionToken: sid,
+      });
+    }
+
+    return res.status(401).json({
+      success: false,
+      message: 'Invalid email or password.',
+      error: 'Invalid email or password.',
     });
   }
 
   if (req.method === 'POST' && action === 'logout') {
-    const cookies = parseCookies(req.headers.cookie);
-    if (cookies['MGC_SESSID']) {
-      SESSIONS.delete(cookies['MGC_SESSID']);
+    const sid = extractSessionId(req);
+    if (sid) {
+      deleteSession(sid);
     }
-    res.setHeader('Set-Cookie', 'MGC_SESSID=; Path=/; HttpOnly; Max-Age=0');
-    return res.json({ success: true, authenticated: false });
+    res.setHeader('Set-Cookie', buildSessionCookieHeader(req, '', 0));
+    return res.json({ success: true, authenticated: false, customerAuthenticated: false });
   }
 
   if (req.method === 'POST' && action === 'change_password') {
@@ -240,36 +553,52 @@ app.all('/api/auth.php', (req, res) => {
       return res.status(401).json({
         success: false,
         authenticated: false,
-        error: 'Unauthorized. Owner authentication required.',
+        message: 'Unauthorized. Admin authentication required.',
+        error: 'Unauthorized. Admin authentication required.',
       });
     }
 
     const currentPassword = String(req.body?.currentPassword || '');
     const newPassword = String(req.body?.newPassword || '');
-    const confirmPassword = String(req.body?.confirmPassword || '');
+    const confirmPassword = String(
+      req.body?.confirmNewPassword ?? req.body?.confirmPassword ?? ''
+    );
 
-    if (!currentPassword || !newPassword || !confirmPassword) {
+    if (!currentPassword) {
       return res.status(400).json({
         success: false,
-        error: 'All password fields are required.',
+        message: 'Please enter your current password.',
+        error: 'Please enter your current password.',
       });
     }
 
-    if (newPassword.length < 8) {
+    if (!newPassword) {
       return res.status(400).json({
         success: false,
-        error: 'New password must be at least 8 characters long.',
+        message: 'Please enter a new password.',
+        error: 'Please enter a new password.',
+      });
+    }
+
+    if (newPassword.length < 6) {
+      return res.status(400).json({
+        success: false,
+        message: 'New password must be at least 6 characters long.',
+        error: 'New password must be at least 6 characters long.',
       });
     }
 
     if (newPassword !== confirmPassword) {
       return res.status(400).json({
         success: false,
-        error: 'New password and confirmation do not match.',
+        message: 'New passwords do not match.',
+        error: 'New passwords do not match.',
       });
     }
 
-    const adminIdx = db.admins.findIndex((a) => a.id === sess.adminId);
+    const adminIdx = db.admins.findIndex(
+      (a) => a.id === (sess.adminId ?? sess.userId) || a.email.toLowerCase() === sess.email.toLowerCase()
+    );
     if (
       adminIdx === -1 ||
       !verifyPassword(
@@ -280,6 +609,7 @@ app.all('/api/auth.php', (req, res) => {
     ) {
       return res.status(401).json({
         success: false,
+        message: 'Current password is incorrect.',
         error: 'Current password is incorrect.',
       });
     }
@@ -292,7 +622,7 @@ app.all('/api/auth.php', (req, res) => {
 
     return res.json({
       success: true,
-      message: 'Owner password updated successfully. Your old password is no longer valid.',
+      message: 'Password updated successfully.',
     });
   }
 
@@ -547,14 +877,40 @@ app.all('/api/orders.php', (req, res) => {
       return res.status(401).json({
         success: false,
         authenticated: false,
+        message: 'Unauthorized. Owner authentication required.',
         error: 'Unauthorized. Owner authentication required.',
+      });
+    }
+
+    const singleOrderId = String(req.query.order_id || req.query.orderNumber || '').trim();
+    if (singleOrderId) {
+      const found = db.orders.find(
+        (o) => o.orderNumber.toLowerCase() === singleOrderId.toLowerCase()
+      );
+      if (!found) {
+        return res.status(404).json({
+          success: false,
+          message: 'Order not found.',
+          error: 'Order not found.',
+        });
+      }
+      return res.json({
+        success: true,
+        order: {
+          ...found,
+          paymentMethod: found.paymentMethod || 'WhatsApp Order',
+        },
       });
     }
 
     const statusFilter = String(req.query.status || '').trim();
     const search = String(req.query.search || '').trim().toLowerCase();
 
-    let list = [...db.orders];
+    let list = db.orders.map((o) => ({
+      ...o,
+      paymentMethod: o.paymentMethod || 'WhatsApp Order',
+    }));
+
     if (statusFilter && statusFilter !== 'All') {
       list = list.filter((o) => o.status === statusFilter);
     }
@@ -575,9 +931,13 @@ app.all('/api/orders.php', (req, res) => {
 
     if (action === 'update_status') {
       if (!getAdminSession(req)) {
-        return res.status(401).json({ success: false, error: 'Unauthorized.' });
+        return res.status(401).json({
+          success: false,
+          message: 'Unauthorized. Owner authentication required.',
+          error: 'Unauthorized. Owner authentication required.',
+        });
       }
-      const orderNumber = String(body.orderNumber || '');
+      const orderNumber = String(body.orderNumber || body.order_id || '').trim();
       const status = body.status as OrderStatusType;
       const allowed: OrderStatusType[] = [
         'Pending',
@@ -588,17 +948,34 @@ app.all('/api/orders.php', (req, res) => {
         'Cancelled',
       ];
       if (!orderNumber || !allowed.includes(status)) {
-        return res.status(400).json({ success: false, error: 'Invalid status.' });
+        return res.status(400).json({
+          success: false,
+          message: 'Invalid order number or status.',
+          error: 'Invalid order number or status.',
+        });
       }
 
       const idx = db.orders.findIndex((o) => o.orderNumber === orderNumber);
       if (idx === -1) {
-        return res.status(404).json({ success: false, error: 'Order not found.' });
+        return res.status(404).json({
+          success: false,
+          message: 'Order not found.',
+          error: 'Order not found.',
+        });
       }
       db.orders[idx].status = status;
       db.orders[idx].updatedAt = new Date().toISOString();
+      if (!db.orders[idx].paymentMethod) {
+        db.orders[idx].paymentMethod = 'WhatsApp Order';
+      }
       saveDatabase(db);
-      return res.json({ success: true, orderNumber, status });
+      return res.json({
+        success: true,
+        message: `Order ${orderNumber} status updated to ${status}.`,
+        orderNumber,
+        status,
+        order: db.orders[idx],
+      });
     }
 
     // PUBLIC ORDER PLACEMENT
@@ -685,6 +1062,7 @@ app.all('/api/orders.php', (req, res) => {
       discount: totalDiscount,
       total: totalAmount,
       status: 'Pending',
+      paymentMethod: 'WhatsApp Order',
     };
 
     db.orders.unshift(newOrder);

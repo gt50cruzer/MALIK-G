@@ -77,6 +77,7 @@ export interface Order {
   discount: number;
   total: number;
   status: OrderStatusType;
+  paymentMethod?: string;
 }
 
 export interface DashboardStats {

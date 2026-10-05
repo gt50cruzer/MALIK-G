@@ -14,10 +14,21 @@ interface ToastMessage {
   type: 'success' | 'error' | 'info';
 }
 
+export interface AuthenticatedCustomer {
+  id: number;
+  fullName: string;
+  email: string;
+  role: 'customer';
+}
+
 interface StoreContextType {
   products: Product[];
   categories: string[];
   refreshCatalog: () => Promise<void>;
+  customerUser: AuthenticatedCustomer | null;
+  setCustomerSession: (user: AuthenticatedCustomer | null, sessionToken?: string) => void;
+  refreshCustomerAuth: () => Promise<void>;
+  logoutCustomer: () => Promise<void>;
   cart: CartItemType[];
   wishlist: string[];
   recentlyViewed: string[];
@@ -71,7 +82,38 @@ const STORAGE_KEYS = {
   LAST_ORDER: 'malik_g_last_order_v2',
   CUSTOMER: 'malik_g_customer_v2',
   MESSAGES: 'malik_g_contact_messages_v2',
+  SESSION_TOKEN: 'malik_g_session_token_v2',
 };
+
+export function getStoredSessionToken(): string {
+  try {
+    return localStorage.getItem(STORAGE_KEYS.SESSION_TOKEN) || '';
+  } catch {
+    return '';
+  }
+}
+
+export function setStoredSessionToken(token: string): void {
+  try {
+    if (token) {
+      localStorage.setItem(STORAGE_KEYS.SESSION_TOKEN, token);
+    } else {
+      localStorage.removeItem(STORAGE_KEYS.SESSION_TOKEN);
+    }
+  } catch {
+    // ignore storage errors
+  }
+}
+
+export function getAuthHeaders(extraHeaders?: Record<string, string>): Record<string, string> {
+  const headers: Record<string, string> = { ...(extraHeaders || {}) };
+  const token = getStoredSessionToken();
+  if (token) {
+    headers['Authorization'] = `Bearer ${token}`;
+    headers['X-Session-Token'] = token;
+  }
+  return headers;
+}
 
 function loadFromStorage<T>(key: string, fallback: T): T {
   try {
@@ -179,6 +221,55 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   const [searchOpen, setSearchOpen] = useState(false);
   const [quickViewProduct, setQuickViewProduct] = useState<Product | null>(null);
   const [toasts, setToasts] = useState<ToastMessage[]>([]);
+  const [customerUser, setCustomerUser] = useState<AuthenticatedCustomer | null>(null);
+
+  const setCustomerSession = useCallback(
+    (user: AuthenticatedCustomer | null, sessionToken?: string) => {
+      if (typeof sessionToken === 'string') {
+        setStoredSessionToken(sessionToken);
+      }
+      setCustomerUser(user);
+    },
+    []
+  );
+
+  const refreshCustomerAuth = useCallback(async () => {
+    try {
+      const res = await fetch('/api/auth.php?action=check', {
+        credentials: 'include',
+        headers: getAuthHeaders(),
+      });
+      if (!res.ok) {
+        setCustomerUser(null);
+        return;
+      }
+      const data = await safeJsonParse<{
+        customerAuthenticated?: boolean;
+        role?: string | null;
+        sessionToken?: string;
+        user?: { id?: number; fullName?: string; email?: string; role?: string };
+      }>(res);
+      if (data.customerAuthenticated && data.role === 'customer' && data.user?.email) {
+        if (data.sessionToken) {
+          setStoredSessionToken(data.sessionToken);
+        }
+        setCustomerUser({
+          id: Number(data.user.id || 0),
+          fullName: String(data.user.fullName || '').trim(),
+          email: String(data.user.email || '').trim(),
+          role: 'customer',
+        });
+      } else {
+        setCustomerUser(null);
+      }
+    } catch {
+      setCustomerUser(null);
+    }
+  }, []);
+
+  useEffect(() => {
+    refreshCustomerAuth();
+  }, [refreshCustomerAuth]);
 
   const refreshCatalog = useCallback(async () => {
     try {
@@ -509,12 +600,30 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     []
   );
 
+  const logoutCustomer = useCallback(async () => {
+    try {
+      await fetch('/api/auth.php?action=logout', {
+        method: 'POST',
+        credentials: 'include',
+        headers: getAuthHeaders(),
+      });
+    } catch {
+      // ignore network error
+    }
+    setStoredSessionToken('');
+    setCustomerUser(null);
+  }, []);
+
   return (
     <StoreContext.Provider
       value={{
         products,
         categories,
         refreshCatalog,
+        customerUser,
+        setCustomerSession,
+        refreshCustomerAuth,
+        logoutCustomer,
         cart,
         wishlist,
         recentlyViewed,

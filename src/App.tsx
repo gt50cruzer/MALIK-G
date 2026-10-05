@@ -16,6 +16,7 @@ import { OrderSuccess } from './pages/OrderSuccess';
 import { About } from './pages/About';
 import { Contact } from './pages/Contact';
 import { AdminPanel } from './pages/AdminPanel';
+import { CustomerAccount } from './pages/CustomerAccount';
 
 const ScrollToTopAndSEO: React.FC = () => {
   const { pathname } = useLocation();
@@ -40,9 +41,21 @@ const ScrollToTopAndSEO: React.FC = () => {
       '/about': 'About Malik G Collection | Sialkot, Pakistan',
       '/contact': 'Contact Malik G Collection | 0321 7126828',
       '/admin': 'Malik G Collection',
+      '/admin/': 'Malik G Collection',
+      '/admin/orders': 'Orders | Malik G Collection',
+      '/admin/products': 'Products | Malik G Collection',
+      '/admin/categories': 'Categories | Malik G Collection',
+      '/admin/sales': 'Sales | Malik G Collection',
+      '/admin/stock': 'Stock | Malik G Collection',
+      '/admin/settings': 'Settings | Malik G Collection',
       '/admin/login': 'Sign In | Malik G Collection',
       '/admin/login.php': 'Sign In | Malik G Collection',
+      '/sign-in': 'Sign In | Malik G Collection',
       '/signin': 'Sign In | Malik G Collection',
+      '/create-account': 'Create Account | Malik G Collection',
+      '/account': 'My Account | Malik G Collection',
+      '/account/orders': 'Order History | Malik G Collection',
+      '/account/settings': 'Account Settings | Malik G Collection',
     };
 
     document.title =
@@ -81,12 +94,18 @@ const NotFound: React.FC = () => (
 
 const AppShell: React.FC = () => {
   const { pathname } = useLocation();
-  const isAdminRoute = pathname.startsWith('/admin') || pathname === '/signin';
+  const isAdminRoute =
+    pathname.startsWith('/admin') ||
+    pathname === '/sign-in' ||
+    pathname === '/signin' ||
+    pathname === '/create-account';
 
   if (isAdminRoute) {
     return (
       <Routes>
+        <Route path="/sign-in" element={<AdminPanel />} />
         <Route path="/signin" element={<AdminPanel />} />
+        <Route path="/create-account" element={<AdminPanel />} />
         <Route path="/admin/*" element={<AdminPanel />} />
       </Routes>
     );
@@ -113,6 +132,9 @@ const AppShell: React.FC = () => {
           <Route path="/order-success" element={<OrderSuccess />} />
           <Route path="/about" element={<About />} />
           <Route path="/contact" element={<Contact />} />
+          <Route path="/account" element={<CustomerAccount section="account" />} />
+          <Route path="/account/orders" element={<CustomerAccount section="orders" />} />
+          <Route path="/account/settings" element={<CustomerAccount section="settings" />} />
           <Route path="*" element={<NotFound />} />
         </Routes>
       </main>

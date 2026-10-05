@@ -1,6 +1,17 @@
-import React, { useState, useEffect } from 'react';
-import { Link, NavLink, useLocation } from 'react-router-dom';
-import { Search, Heart, ShoppingBag, Menu, X, ChevronDown } from 'lucide-react';
+import React, { useState, useEffect, useRef } from 'react';
+import { Link, NavLink, useLocation, useNavigate } from 'react-router-dom';
+import {
+  Search,
+  Heart,
+  ShoppingBag,
+  Menu,
+  X,
+  ChevronDown,
+  User,
+  Package,
+  Settings,
+  LogOut,
+} from 'lucide-react';
 import { useStore } from '../context/StoreContext';
 import { BRAND_INFO } from '../data/products';
 
@@ -21,16 +32,80 @@ const MORE_NAV = [
   { label: 'Contact', path: '/contact' },
 ];
 
+function getCustomerAvatarInitial(fullName: string, email: string): string {
+  const trimmedName = fullName.trim();
+  if (trimmedName.length > 0) {
+    const firstWord = trimmedName.split(/\s+/)[0];
+    return firstWord.charAt(0).toUpperCase();
+  }
+  const trimmedEmail = email.trim();
+  if (trimmedEmail.length > 0) {
+    return trimmedEmail.charAt(0).toUpperCase();
+  }
+  return 'M';
+}
+
 export const Header: React.FC = () => {
-  const { cartCount, wishlist, setSearchOpen } = useStore();
+  const {
+    cartCount,
+    wishlist,
+    setSearchOpen,
+    customerUser,
+    logoutCustomer,
+    showToast,
+  } = useStore();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [moreDropdownOpen, setMoreDropdownOpen] = useState(false);
+  const [profileDropdownOpen, setProfileDropdownOpen] = useState(false);
+  const profileDropdownRef = useRef<HTMLDivElement>(null);
+
   const location = useLocation();
+  const navigate = useNavigate();
 
   useEffect(() => {
     setMobileMenuOpen(false);
     setMoreDropdownOpen(false);
+    setProfileDropdownOpen(false);
   }, [location.pathname]);
+
+  // Close profile dropdown on outside click or Escape key
+  useEffect(() => {
+    if (!profileDropdownOpen) return;
+
+    const handleClickOutside = (event: MouseEvent) => {
+      if (
+        profileDropdownRef.current &&
+        !profileDropdownRef.current.contains(event.target as Node)
+      ) {
+        setProfileDropdownOpen(false);
+      }
+    };
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setProfileDropdownOpen(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    document.addEventListener('keydown', handleKeyDown);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+      document.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [profileDropdownOpen]);
+
+  const handleCustomerLogout = async () => {
+    setProfileDropdownOpen(false);
+    setMobileMenuOpen(false);
+    await logoutCustomer();
+    showToast('Signed out successfully.', 'info');
+    navigate('/');
+  };
+
+  const avatarInitial = customerUser
+    ? getCustomerAvatarInitial(customerUser.fullName, customerUser.email)
+    : '';
 
   return (
     <div className="sticky top-0 z-40 w-full bg-[#0B0B0C]/95 backdrop-blur-md border-b border-white/10">
@@ -76,7 +151,10 @@ export const Header: React.FC = () => {
         </div>
 
         {/* Zone 2: Clean Typography Navigation Links */}
-        <nav className="hidden lg:flex items-center gap-6 xl:gap-7 text-sm font-medium text-[#A1A1AA]" aria-label="Main Navigation">
+        <nav
+          className="hidden lg:flex items-center gap-6 xl:gap-7 text-sm font-medium text-[#A1A1AA]"
+          aria-label="Main Navigation"
+        >
           {PRIMARY_NAV.map((item) => (
             <NavLink
               key={item.path}
@@ -116,12 +194,18 @@ export const Header: React.FC = () => {
 
           <div
             className="relative 2xl:hidden"
-            onMouseEnter={() => setMoreDropdownOpen(true)}
+            onMouseEnter={() => {
+              setMoreDropdownOpen(true);
+              setProfileDropdownOpen(false);
+            }}
             onMouseLeave={() => setMoreDropdownOpen(false)}
           >
             <button
               type="button"
-              onClick={() => setMoreDropdownOpen((prev) => !prev)}
+              onClick={() => {
+                setMoreDropdownOpen((prev) => !prev);
+                setProfileDropdownOpen(false);
+              }}
               className="flex items-center gap-1 py-1 text-[#A1A1AA] hover:text-[#F5F5F0] transition-colors whitespace-nowrap shrink-0"
               aria-expanded={moreDropdownOpen}
             >
@@ -153,7 +237,7 @@ export const Header: React.FC = () => {
           </div>
         </nav>
 
-        {/* Zone 3: Primary Actions (Search, Wishlist, Sign In, Cart) */}
+        {/* Zone 3: Primary Actions (Search, Wishlist, Sign In / Customer Avatar, Cart) */}
         <div className="flex items-center gap-2 sm:gap-4">
           <button
             type="button"
@@ -170,18 +254,112 @@ export const Header: React.FC = () => {
             aria-label={`Wishlist (${wishlist.length} items)`}
           >
             <Heart className="w-5 h-5 stroke-[1.75]" />
-            {wishlist.length > 0 && (
-              <span className="sr-only">({wishlist.length})</span>
-            )}
+            {wishlist.length > 0 && <span className="sr-only">({wishlist.length})</span>}
           </Link>
 
-          <Link
-            to="/admin/login.php"
-            className="hidden sm:inline-flex items-center px-2.5 py-1.5 text-xs font-medium uppercase tracking-wider text-[#A1A1AA] hover:text-[#D4AF37] transition-colors whitespace-nowrap focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[#D4AF37]"
-            aria-label="Owner Sign In"
-          >
-            Sign In
-          </Link>
+          {customerUser ? (
+            <div className="relative" ref={profileDropdownRef}>
+              <button
+                type="button"
+                onClick={() => {
+                  setProfileDropdownOpen((prev) => !prev);
+                  setMoreDropdownOpen(false);
+                }}
+                className="w-9 h-9 rounded-full bg-[#D4AF37] hover:bg-[#e5c247] text-[#0B0B0C] font-bold text-sm flex items-center justify-center transition-colors cursor-pointer shrink-0 shadow-sm ring-1 ring-[#D4AF37]/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white"
+                aria-label={`Account menu for ${customerUser.fullName}`}
+                aria-expanded={profileDropdownOpen}
+                aria-haspopup="menu"
+              >
+                {avatarInitial}
+              </button>
+
+              {profileDropdownOpen && (
+                <div
+                  role="menu"
+                  className="absolute right-0 top-full mt-2.5 w-64 max-w-[calc(100vw-2rem)] bg-[#121214] border border-white/15 shadow-2xl z-50 divide-y divide-white/10"
+                >
+                  {/* Customer Identity Header */}
+                  <div className="p-4 flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-full bg-[#D4AF37] text-[#0B0B0C] font-bold text-sm flex items-center justify-center shrink-0">
+                      {avatarInitial}
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm font-semibold text-[#F5F5F0] truncate">
+                        {customerUser.fullName}
+                      </p>
+                      <p className="text-xs text-[#A1A1AA] truncate">
+                        {customerUser.email}
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Dropdown Navigation Items */}
+                  <div className="py-1.5">
+                    <Link
+                      to="/account"
+                      role="menuitem"
+                      onClick={() => setProfileDropdownOpen(false)}
+                      className="flex items-center gap-3 px-4 py-2.5 text-xs font-medium text-[#F5F5F0] hover:bg-white/5 hover:text-[#D4AF37] transition-colors"
+                    >
+                      <User className="w-4 h-4 text-[#D4AF37] shrink-0" />
+                      <span>My Account</span>
+                    </Link>
+
+                    <Link
+                      to="/account/orders"
+                      role="menuitem"
+                      onClick={() => setProfileDropdownOpen(false)}
+                      className="flex items-center gap-3 px-4 py-2.5 text-xs font-medium text-[#F5F5F0] hover:bg-white/5 hover:text-[#D4AF37] transition-colors"
+                    >
+                      <Package className="w-4 h-4 text-[#D4AF37] shrink-0" />
+                      <span>Order History</span>
+                    </Link>
+
+                    <Link
+                      to="/wishlist"
+                      role="menuitem"
+                      onClick={() => setProfileDropdownOpen(false)}
+                      className="flex items-center gap-3 px-4 py-2.5 text-xs font-medium text-[#F5F5F0] hover:bg-white/5 hover:text-[#D4AF37] transition-colors"
+                    >
+                      <Heart className="w-4 h-4 text-[#D4AF37] shrink-0" />
+                      <span>Wishlist</span>
+                    </Link>
+
+                    <Link
+                      to="/account/settings"
+                      role="menuitem"
+                      onClick={() => setProfileDropdownOpen(false)}
+                      className="flex items-center gap-3 px-4 py-2.5 text-xs font-medium text-[#F5F5F0] hover:bg-white/5 hover:text-[#D4AF37] transition-colors"
+                    >
+                      <Settings className="w-4 h-4 text-[#D4AF37] shrink-0" />
+                      <span>Settings</span>
+                    </Link>
+                  </div>
+
+                  {/* Logout Action */}
+                  <div className="py-1.5">
+                    <button
+                      type="button"
+                      role="menuitem"
+                      onClick={handleCustomerLogout}
+                      className="w-full flex items-center gap-3 px-4 py-2.5 text-xs font-medium text-red-300 hover:bg-red-500/10 hover:text-red-200 transition-colors text-left"
+                    >
+                      <LogOut className="w-4 h-4 shrink-0" />
+                      <span>Logout</span>
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          ) : (
+            <Link
+              to="/sign-in"
+              className="inline-flex items-center px-2.5 py-1.5 text-xs font-medium uppercase tracking-wider text-[#A1A1AA] hover:text-[#D4AF37] transition-colors whitespace-nowrap focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[#D4AF37]"
+              aria-label="Sign In"
+            >
+              Sign In
+            </Link>
+          )}
 
           <Link
             to="/cart"
@@ -213,12 +391,14 @@ export const Header: React.FC = () => {
             </NavLink>
           ))}
           <div className="pt-4 mt-4 border-t border-white/10 flex flex-col gap-2 text-xs text-[#A1A1AA] px-3">
-            <Link
-              to="/admin/login.php"
-              className="inline-flex items-center justify-between py-2 text-sm font-medium text-[#F5F5F0] hover:text-[#D4AF37] transition-colors border-b border-white/5 mb-1"
-            >
-              <span>Sign In</span>
-            </Link>
+            {!customerUser && (
+              <Link
+                to="/sign-in"
+                className="inline-flex items-center justify-between py-2 text-sm font-medium text-[#F5F5F0] hover:text-[#D4AF37] transition-colors border-b border-white/5 mb-1"
+              >
+                <span>Sign In</span>
+              </Link>
+            )}
             <span>Location: {BRAND_INFO.location}</span>
             <a
               href={`tel:${BRAND_INFO.phoneRaw}`}

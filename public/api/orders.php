@@ -65,14 +65,15 @@ function hydrateOrders(PDO $pdo, array $orderRows): array
     foreach ($orderRows as $row) {
         $oid = (int)$row['id'];
         $result[] = [
-            'id'          => $oid,
-            'orderNumber' => $row['order_id'],
-            'createdAt'   => $row['created_at'],
-            'updatedAt'   => $row['updated_at'],
-            'status'      => $row['status'],
-            'total'       => (float)$row['total_amount'],
-            'subtotal'    => (float)$row['total_amount'],
-            'customer'    => [
+            'id'            => $oid,
+            'orderNumber'   => $row['order_id'],
+            'createdAt'     => $row['created_at'],
+            'updatedAt'     => $row['updated_at'],
+            'status'        => $row['status'],
+            'paymentMethod' => 'WhatsApp Order',
+            'total'         => (float)$row['total_amount'],
+            'subtotal'      => (float)$row['total_amount'],
+            'customer'      => [
                 'fullName' => $row['customer_name'],
                 'phone'    => $row['customer_phone'],
                 'email'    => $row['customer_email'],
@@ -80,7 +81,7 @@ function hydrateOrders(PDO $pdo, array $orderRows): array
                 'address'  => $row['customer_address'],
                 'notes'    => $row['notes'] ?: '',
             ],
-            'orderItems'  => $itemsByOrder[$oid] ?? [],
+            'orderItems'    => $itemsByOrder[$oid] ?? [],
         ];
     }
 
@@ -92,6 +93,21 @@ function hydrateOrders(PDO $pdo, array $orderRows): array
 // ============================================================================
 if ($_SERVER['REQUEST_METHOD'] === 'GET') {
     requireAdminAuth();
+
+    $singleOrderId = trim((string)($_GET['order_id'] ?? $_GET['orderNumber'] ?? ''));
+    if ($singleOrderId !== '') {
+        $stmt = $pdo->prepare('SELECT * FROM orders WHERE order_id = :order_id LIMIT 1');
+        $stmt->execute([':order_id' => $singleOrderId]);
+        $rows = $stmt->fetchAll();
+        if (empty($rows)) {
+            sendJson(['success' => false, 'error' => 'Order not found.'], 404);
+        }
+        $hydrated = hydrateOrders($pdo, $rows);
+        sendJson([
+            'success' => true,
+            'order'   => $hydrated[0],
+        ]);
+    }
 
     $statusFilter = trim((string)($_GET['status'] ?? ''));
     $search = trim((string)($_GET['search'] ?? ''));
@@ -130,12 +146,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         requireAdminAuth();
         verifyCsrfToken();
 
-        $orderNumber = trim((string)($body['orderNumber'] ?? ''));
+        $orderNumber = trim((string)($body['orderNumber'] ?? $body['order_id'] ?? ''));
         $status = trim((string)($body['status'] ?? ''));
         $allowedStatuses = ['Pending', 'Confirmed', 'Processing', 'Shipped', 'Delivered', 'Cancelled'];
 
         if ($orderNumber === '' || !in_array($status, $allowedStatuses, true)) {
             sendJson(['success' => false, 'error' => 'Invalid order number or status.'], 400);
+        }
+
+        $chkStmt = $pdo->prepare('SELECT id FROM orders WHERE order_id = :order_id LIMIT 1');
+        $chkStmt->execute([':order_id' => $orderNumber]);
+        if (!$chkStmt->fetch()) {
+            sendJson(['success' => false, 'error' => 'Order not found.'], 404);
         }
 
         $stmt = $pdo->prepare('UPDATE orders SET status = :status, updated_at = NOW() WHERE order_id = :order_id');
@@ -144,7 +166,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             ':order_id' => $orderNumber,
         ]);
 
-        sendJson(['success' => true, 'orderNumber' => $orderNumber, 'status' => $status]);
+        $fetchStmt = $pdo->prepare('SELECT * FROM orders WHERE order_id = :order_id LIMIT 1');
+        $fetchStmt->execute([':order_id' => $orderNumber]);
+        $hydrated = hydrateOrders($pdo, $fetchStmt->fetchAll());
+
+        sendJson([
+            'success'     => true,
+            'message'     => "Order {$orderNumber} status updated to {$status}.",
+            'orderNumber' => $orderNumber,
+            'status'      => $status,
+            'order'       => $hydrated[0] ?? null,
+        ]);
     }
 
     // PUBLIC CUSTOMER ORDER PLACEMENT (Saved to MySQL BEFORE WhatsApp redirect)

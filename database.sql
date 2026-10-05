@@ -20,6 +20,20 @@ CREATE TABLE IF NOT EXISTS `admins` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- ----------------------------------------------------------------------------
+-- 1B. TABLE: customers
+-- ----------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS `customers` (
+  `id` INT UNSIGNED NOT NULL AUTO_INCREMENT,
+  `full_name` VARCHAR(191) NOT NULL,
+  `email` VARCHAR(191) NOT NULL,
+  `password_hash` VARCHAR(255) NOT NULL,
+  `role` VARCHAR(32) NOT NULL DEFAULT 'customer',
+  `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uniq_customer_email` (`email`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- ----------------------------------------------------------------------------
 -- 2. TABLE: categories
 -- ----------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS `categories` (
@@ -150,12 +164,11 @@ ON DUPLICATE KEY UPDATE `subtitle` = VALUES(`subtitle`);
 
 -- ============================================================================
 -- SEED DATA: INITIAL OWNER ADMIN ACCOUNT
--- Default Email: abdurrehmanadil91@gmail.com
--- Note: Use /api/setup_owner.php or Admin -> Change Password to set your password
--- Below hash corresponds to default setup password: MalikG@2026
+-- Default Email: malikg@gmail.com
+-- Note: Use Admin -> Settings -> Change Password to update your password
 -- ============================================================================
 INSERT INTO `admins` (`id`, `email`, `password_hash`) VALUES
-(1, 'abdurrehmanadil91@gmail.com', '$2y$10$8K1p/a0dL1LXMIgoEDFrwOfMQkF9N8rK9xT9H.wU1x5Z1x5Z1x5Z.')
+(1, 'malikg@gmail.com', '$2y$10$8K1p/a0dL1LXMIgoEDFrwOfMQkF9N8rK9xT9H.wU1x5Z1x5Z1x5Z.')
 ON DUPLICATE KEY UPDATE `email` = VALUES(`email`);
 
 -- ============================================================================

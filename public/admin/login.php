@@ -72,9 +72,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     <form method="POST" action="/admin/login.php" class="space-y-5">
       <div class="space-y-1.5">
-        <label class="block text-xs uppercase tracking-wider text-[#F5F5F0]">Email / Gmail</label>
+        <label class="block text-xs uppercase tracking-wider text-[#F5F5F0]">Email</label>
         <input type="email" name="email" required value="<?= htmlspecialchars($emailInput, ENT_QUOTES, 'UTF-8') ?>"
-               placeholder="name@gmail.com"
+               placeholder="Enter your email"
                class="w-full bg-[#18181B] border border-white/15 focus:border-[#D4AF37] px-4 py-3 text-sm text-[#F5F5F0] focus:outline-none" />
       </div>
 
@@ -90,8 +90,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
       </button>
     </form>
 
+    <div class="pt-2 text-center space-y-1.5">
+      <p class="text-xs text-[#A1A1AA]">Don't have an account?</p>
+      <a href="/create-account" class="inline-block text-xs font-bold uppercase tracking-[0.15em] text-[#D4AF37] hover:text-[#e5c247] transition-colors">CREATE ACCOUNT</a>
+    </div>
+
     <div class="pt-4 border-t border-white/10 text-center">
-      <a href="/" class="text-xs text-[#A1A1AA] hover:text-[#D4AF37] uppercase tracking-wider">&larr; Return to Store</a>
+      <a href="/" class="text-xs text-[#A1A1AA] hover:text-[#D4AF37] uppercase tracking-wider">&larr; RETURN TO STORE</a>
     </div>
   </div>
 </body>
