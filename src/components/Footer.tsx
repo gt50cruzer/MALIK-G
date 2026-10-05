@@ -189,7 +189,7 @@ export const Footer: React.FC = () => {
 
           <div className="pt-8 flex flex-col sm:flex-row items-center justify-between gap-4 text-xs text-[#A1A1AA]">
             <p>© 2026 Malik G Collection. All Rights Reserved.</p>
-            <p>Sialkot, Punjab, Pakistan · Cash on Delivery Available Nationwide</p>
+            <p>Sialkot, Punjab, Pakistan · Direct WhatsApp Ordering</p>
           </div>
         </div>
       </footer>
@@ -216,16 +216,15 @@ export const Footer: React.FC = () => {
             {activeModal === 'shipping' && (
               <div className="space-y-4">
                 <h3 className="font-display text-2xl font-bold text-[#D4AF37]">
-                  Shipping &amp; Delivery Policy
+                  Shipping &amp; Dispatch Information
                 </h3>
                 <p className="text-sm text-[#A1A1AA] leading-relaxed">
                   We dispatch orders daily from our Sialkot store across all cities in Pakistan via reliable courier partners.
                 </p>
                 <ul className="space-y-2 text-sm text-[#F5F5F0] border-t border-white/10 pt-4">
-                  <li>· <strong>Orders Above Rs. 5,000:</strong> Free Delivery nationwide</li>
-                  <li>· <strong>Orders Below Rs. 5,000:</strong> Flat Rs. 250 standard delivery charge</li>
-                  <li>· <strong>Estimated Delivery Time:</strong> 2 to 4 working days across Pakistan</li>
-                  <li>· <strong>Sialkot Local Delivery:</strong> Same-day or next-day delivery available via WhatsApp coordination</li>
+                  <li>· <strong>Order Confirmation:</strong> Every order is confirmed directly via WhatsApp with your unique Order ID (<span className="font-mono-num">MGC-XXXXXX</span>).</li>
+                  <li>· <strong>Estimated Delivery Time:</strong> 2 to 4 working days across Pakistan.</li>
+                  <li>· <strong>Sialkot Local Dispatch:</strong> Fast local coordination available via WhatsApp at <span className="font-mono-num">0321 7126828</span>.</li>
                 </ul>
               </div>
             )}

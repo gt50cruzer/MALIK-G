@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { ShieldCheck, Lock, ArrowLeft, CheckCircle2 } from 'lucide-react';
+import { ShieldCheck, Lock, ArrowLeft, MessageCircle } from 'lucide-react';
 import { useStore } from '../context/StoreContext';
 import { formatPKR } from '../data/products';
 import { SafeImage } from '../components/SafeImage';
@@ -11,7 +11,6 @@ export const Checkout: React.FC = () => {
     cart,
     cartSubtotal,
     cartDiscountTotal,
-    deliveryFee,
     grandTotal,
     placeOrder,
     savedCustomer,
@@ -23,11 +22,10 @@ export const Checkout: React.FC = () => {
   const [city, setCity] = useState(savedCustomer?.city || 'Sialkot');
   const [address, setAddress] = useState(savedCustomer?.address || '');
   const [notes, setNotes] = useState('');
-  const [paymentMethod, setPaymentMethod] = useState<
-    'Cash on Delivery' | 'Bank Transfer / WhatsApp'
-  >('Cash on Delivery');
 
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const [submitting, setSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState('');
 
   if (cart.length === 0) {
     return (
@@ -64,12 +62,14 @@ export const Checkout: React.FC = () => {
         'Please enter a valid Pakistani mobile number (e.g. 03217126828 or +923217126828).';
     }
 
-    if (email.trim() && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) {
-      newErrors.email = 'Please enter a valid email address.';
+    if (!email.trim()) {
+      newErrors.email = 'Gmail / Email address is required.';
+    } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) {
+      newErrors.email = 'Please enter a valid Gmail or email address.';
     }
 
     if (!city.trim()) {
-      newErrors.city = 'City is required.';
+      newErrors.city = 'Location / City is required.';
     }
 
     if (!address.trim() || address.trim().length < 8) {
@@ -80,23 +80,33 @@ export const Checkout: React.FC = () => {
     return Object.keys(newErrors).length === 0;
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setSubmitError('');
     if (!validateForm()) return;
 
-    placeOrder(
-      {
+    setSubmitting(true);
+    try {
+      // 1. Saves order & order_items snapshots to MySQL database BEFORE opening WhatsApp
+      const { whatsappUrl } = await placeOrder({
         fullName: fullName.trim(),
         phone: phone.trim(),
-        email: email.trim() || undefined,
+        email: email.trim(),
         city: city.trim(),
         address: address.trim(),
         notes: notes.trim() || undefined,
-      },
-      paymentMethod
-    );
+      });
 
-    navigate('/order-success');
+      // 2. Navigate to Order Success page (which also provides the WhatsApp confirmation link)
+      // and trigger WhatsApp redirect
+      navigate('/order-success');
+      window.location.href = whatsappUrl;
+    } catch (err) {
+      setSubmitError(
+        err instanceof Error ? err.message : 'Unable to place order. Please try again.'
+      );
+      setSubmitting(false);
+    }
   };
 
   return (
@@ -111,25 +121,36 @@ export const Checkout: React.FC = () => {
             <span>Back to Shopping Bag</span>
           </Link>
           <h1 className="font-display text-3xl sm:text-4xl font-bold text-[#F5F5F0]">
-            Checkout
+            Complete Your Order
           </h1>
         </div>
         <div className="hidden sm:flex items-center gap-2 text-xs text-[#A1A1AA]">
           <Lock className="w-4 h-4 text-[#D4AF37]" />
-          <span>Secure Checkout · Malik G Collection</span>
+          <span>Direct WhatsApp Order Confirmation · Malik G Collection</span>
         </div>
       </div>
 
       <form onSubmit={handleSubmit} noValidate className="grid grid-cols-1 lg:grid-cols-12 gap-10">
-        {/* Left: Customer Details & Payment Method */}
+        {/* Left: Required Customer Details */}
         <div className="lg:col-span-7 space-y-8">
           <div className="bg-[#121214] border border-white/10 p-6 sm:p-8 space-y-6">
-            <h2 className="font-display text-2xl font-bold text-[#F5F5F0] border-b border-white/10 pb-3">
-              1. Customer &amp; Delivery Details
-            </h2>
+            <div className="border-b border-white/10 pb-4">
+              <h2 className="font-display text-2xl font-bold text-[#F5F5F0]">
+                Customer Information
+              </h2>
+              <p className="text-xs text-[#A1A1AA] mt-1">
+                No account registration required. Enter your details below to register your order and confirm via WhatsApp.
+              </p>
+            </div>
+
+            {submitError && (
+              <div className="p-4 bg-red-500/10 border border-red-500/40 text-xs text-red-300">
+                {submitError}
+              </div>
+            )}
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
-              {/* Full Name */}
+              {/* 1. Full Name * */}
               <div className="sm:col-span-1 space-y-1.5">
                 <label
                   htmlFor="checkout-name"
@@ -140,6 +161,7 @@ export const Checkout: React.FC = () => {
                 <input
                   id="checkout-name"
                   type="text"
+                  required
                   value={fullName}
                   onChange={(e) => {
                     setFullName(e.target.value);
@@ -153,7 +175,7 @@ export const Checkout: React.FC = () => {
                 )}
               </div>
 
-              {/* Phone Number */}
+              {/* 2. Phone Number * */}
               <div className="sm:col-span-1 space-y-1.5">
                 <label
                   htmlFor="checkout-phone"
@@ -164,6 +186,7 @@ export const Checkout: React.FC = () => {
                 <input
                   id="checkout-phone"
                   type="tel"
+                  required
                   value={phone}
                   onChange={(e) => {
                     setPhone(e.target.value);
@@ -177,23 +200,24 @@ export const Checkout: React.FC = () => {
                 )}
               </div>
 
-              {/* Email */}
+              {/* 3. Gmail / Email * */}
               <div className="sm:col-span-1 space-y-1.5">
                 <label
                   htmlFor="checkout-email"
-                  className="block text-xs uppercase tracking-wider text-[#A1A1AA]"
+                  className="block text-xs uppercase tracking-wider text-[#F5F5F0]"
                 >
-                  Email (Optional)
+                  Gmail / Email <span className="text-[#D4AF37]">*</span>
                 </label>
                 <input
                   id="checkout-email"
                   type="email"
+                  required
                   value={email}
                   onChange={(e) => {
                     setEmail(e.target.value);
                     if (errors.email) setErrors({ ...errors, email: '' });
                   }}
-                  placeholder="you@example.com"
+                  placeholder="example@gmail.com"
                   className="w-full bg-[#18181B] border border-white/15 focus:border-[#D4AF37] px-4 py-3 text-sm text-[#F5F5F0] focus:outline-none"
                 />
                 {errors.email && (
@@ -201,17 +225,18 @@ export const Checkout: React.FC = () => {
                 )}
               </div>
 
-              {/* City */}
+              {/* 4. Location / City * */}
               <div className="sm:col-span-1 space-y-1.5">
                 <label
                   htmlFor="checkout-city"
                   className="block text-xs uppercase tracking-wider text-[#F5F5F0]"
                 >
-                  City <span className="text-[#D4AF37]">*</span>
+                  Location / City <span className="text-[#D4AF37]">*</span>
                 </label>
                 <input
                   id="checkout-city"
                   type="text"
+                  required
                   value={city}
                   onChange={(e) => {
                     setCity(e.target.value);
@@ -225,17 +250,18 @@ export const Checkout: React.FC = () => {
                 )}
               </div>
 
-              {/* Complete Address */}
+              {/* 5. Complete Address * */}
               <div className="sm:col-span-2 space-y-1.5">
                 <label
                   htmlFor="checkout-address"
                   className="block text-xs uppercase tracking-wider text-[#F5F5F0]"
                 >
-                  Complete Address <span className="text-[#D4AF37]">*</span>
+                  Full Address <span className="text-[#D4AF37]">*</span>
                 </label>
                 <textarea
                   id="checkout-address"
                   rows={3}
+                  required
                   value={address}
                   onChange={(e) => {
                     setAddress(e.target.value);
@@ -249,81 +275,28 @@ export const Checkout: React.FC = () => {
                 )}
               </div>
 
-              {/* Order Notes */}
+              {/* Additional Order Note (Optional) */}
               <div className="sm:col-span-2 space-y-1.5">
                 <label
                   htmlFor="checkout-notes"
                   className="block text-xs uppercase tracking-wider text-[#A1A1AA]"
                 >
-                  Order Notes (Optional)
+                  Additional Order Note (Optional)
                 </label>
                 <textarea
                   id="checkout-notes"
                   rows={2}
                   value={notes}
                   onChange={(e) => setNotes(e.target.value)}
-                  placeholder="Special delivery instructions, gift packaging requests..."
+                  placeholder="Any sizing preferences or instructions for Malik G Collection..."
                   className="w-full bg-[#18181B] border border-white/15 focus:border-[#D4AF37] px-4 py-2.5 text-sm text-[#F5F5F0] focus:outline-none"
                 />
               </div>
             </div>
           </div>
-
-          {/* Payment Method Selection */}
-          <div className="bg-[#121214] border border-white/10 p-6 sm:p-8 space-y-5">
-            <h2 className="font-display text-2xl font-bold text-[#F5F5F0] border-b border-white/10 pb-3">
-              2. Payment Method
-            </h2>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <button
-                type="button"
-                onClick={() => setPaymentMethod('Cash on Delivery')}
-                className={`p-4 border text-left transition-colors flex flex-col justify-between gap-2 ${
-                  paymentMethod === 'Cash on Delivery'
-                    ? 'border-[#D4AF37] bg-[#D4AF37]/10'
-                    : 'border-white/15 bg-[#18181B] hover:border-white/30'
-                }`}
-              >
-                <div className="flex items-center justify-between">
-                  <span className="text-sm font-bold text-[#F5F5F0]">
-                    Cash on Delivery
-                  </span>
-                  {paymentMethod === 'Cash on Delivery' && (
-                    <CheckCircle2 className="w-4 h-4 text-[#D4AF37]" />
-                  )}
-                </div>
-                <p className="text-xs text-[#A1A1AA]">
-                  Pay in cash at your doorstep when you receive your parcel.
-                </p>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => setPaymentMethod('Bank Transfer / WhatsApp')}
-                className={`p-4 border text-left transition-colors flex flex-col justify-between gap-2 ${
-                  paymentMethod === 'Bank Transfer / WhatsApp'
-                    ? 'border-[#D4AF37] bg-[#D4AF37]/10'
-                    : 'border-white/15 bg-[#18181B] hover:border-white/30'
-                }`}
-              >
-                <div className="flex items-center justify-between">
-                  <span className="text-sm font-bold text-[#F5F5F0]">
-                    Bank Transfer / WhatsApp
-                  </span>
-                  {paymentMethod === 'Bank Transfer / WhatsApp' && (
-                    <CheckCircle2 className="w-4 h-4 text-[#D4AF37]" />
-                  )}
-                </div>
-                <p className="text-xs text-[#A1A1AA]">
-                  Coordinate direct bank transfer or JazzCash/EasyPaisa via WhatsApp (0321 7126828).
-                </p>
-              </button>
-            </div>
-          </div>
         </div>
 
-        {/* Right: Order Summary */}
+        {/* Right: Order Summary (No Delivery Charge, No COD) */}
         <div className="lg:col-span-5">
           <div className="bg-[#121214] border border-white/10 p-6 sm:p-8 space-y-6 sticky top-28">
             <h2 className="font-display text-2xl font-bold text-[#F5F5F0] border-b border-white/10 pb-4">
@@ -334,7 +307,7 @@ export const Checkout: React.FC = () => {
             <div className="space-y-4 max-h-80 overflow-y-auto pr-1">
               {cart.map((item) => (
                 <div
-                  key={`${item.product.id}-${item.selectedSize || 'def'}`}
+                  key={`${item.product.id}-${item.selectedSize || 'def'}-${item.selectedColor || 'def'}`}
                   className="flex items-center justify-between gap-3 text-sm"
                 >
                   <div className="flex items-center gap-3 min-w-0">
@@ -351,6 +324,7 @@ export const Checkout: React.FC = () => {
                       </p>
                       <p className="text-[11px] text-[#A1A1AA]">
                         Qty: {item.quantity}
+                        {item.selectedColor ? ` · Color: ${item.selectedColor}` : ''}
                         {item.selectedSize ? ` · Size: ${item.selectedSize}` : ''}
                       </p>
                     </div>
@@ -362,7 +336,7 @@ export const Checkout: React.FC = () => {
               ))}
             </div>
 
-            {/* Totals Breakdown */}
+            {/* Totals Breakdown (No Delivery Charge) */}
             <div className="space-y-3 pt-4 border-t border-white/10 text-sm">
               <div className="flex items-center justify-between text-[#A1A1AA]">
                 <span>Subtotal</span>
@@ -371,27 +345,18 @@ export const Checkout: React.FC = () => {
                 </span>
               </div>
 
-              <div className="flex items-center justify-between text-[#A1A1AA]">
-                <span>Discount</span>
-                <span className="font-mono-num text-[#D4AF37]">
-                  {cartDiscountTotal > 0 ? `-${formatPKR(cartDiscountTotal)}` : 'Rs. 0'}
-                </span>
-              </div>
-
-              <div className="flex items-center justify-between text-[#A1A1AA]">
-                <span>Delivery</span>
-                <span className="font-mono-num text-[#F5F5F0] font-semibold">
-                  {deliveryFee === 0 ? (
-                    <span className="text-[#D4AF37]">FREE DELIVERY</span>
-                  ) : (
-                    formatPKR(deliveryFee)
-                  )}
-                </span>
-              </div>
+              {cartDiscountTotal > 0 && (
+                <div className="flex items-center justify-between text-[#A1A1AA]">
+                  <span>Offer Savings</span>
+                  <span className="font-mono-num text-[#D4AF37]">
+                    -{formatPKR(cartDiscountTotal)}
+                  </span>
+                </div>
+              )}
 
               <div className="pt-4 border-t border-white/10 flex items-baseline justify-between">
                 <span className="text-base font-bold text-[#F5F5F0] uppercase tracking-wider">
-                  Total
+                  Total Amount
                 </span>
                 <span className="font-mono-num text-2xl font-bold text-[#D4AF37]">
                   {formatPKR(grandTotal)}
@@ -401,14 +366,18 @@ export const Checkout: React.FC = () => {
 
             <button
               type="submit"
-              className="w-full py-4 px-6 bg-[#D4AF37] hover:bg-[#e5c247] text-[#0B0B0C] text-xs sm:text-sm font-bold uppercase tracking-[0.15em] transition-colors"
+              disabled={submitting}
+              className="w-full flex items-center justify-center gap-2 py-4 px-6 bg-[#D4AF37] hover:bg-[#e5c247] disabled:opacity-60 text-[#0B0B0C] text-xs sm:text-sm font-bold uppercase tracking-[0.15em] transition-colors"
             >
-              PLACE ORDER
+              <MessageCircle className="w-4 h-4 fill-current" />
+              <span>{submitting ? 'SAVING ORDER...' : 'PLACE ORDER ON WHATSAPP'}</span>
             </button>
 
-            <div className="flex items-center justify-center gap-2 text-xs text-[#A1A1AA] pt-1">
-              <ShieldCheck className="w-4 h-4 text-[#D4AF37]" />
-              <span>Dispatched from Malik G Collection, Sialkot</span>
+            <div className="flex items-center justify-center gap-2 text-xs text-[#A1A1AA] pt-1 text-center">
+              <ShieldCheck className="w-4 h-4 text-[#D4AF37] shrink-0" />
+              <span>
+                Your order is saved with a unique MGC Order ID before opening WhatsApp.
+              </span>
             </div>
           </div>
         </div>

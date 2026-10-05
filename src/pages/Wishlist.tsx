@@ -2,14 +2,14 @@ import React from 'react';
 import { Link } from 'react-router-dom';
 import { Heart, Trash2, ShoppingBag, ArrowRight } from 'lucide-react';
 import { useStore } from '../context/StoreContext';
-import { PRODUCTS, formatPKR } from '../data/products';
+import { formatPKR } from '../data/products';
 import { SafeImage } from '../components/SafeImage';
 
 export const Wishlist: React.FC = () => {
-  const { wishlist, toggleWishlist, addToCart } = useStore();
+  const { products, wishlist, toggleWishlist, addToCart } = useStore();
 
   const wishedProducts = wishlist
-    .map((id) => PRODUCTS.find((p) => p.id === id))
+    .map((id) => products.find((p) => p.id === id))
     .filter((p): p is NonNullable<typeof p> => Boolean(p));
 
   if (wishedProducts.length === 0) {

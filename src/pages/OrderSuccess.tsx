@@ -2,10 +2,10 @@ import React from 'react';
 import { Link } from 'react-router-dom';
 import { CheckCircle, MessageCircle, ShoppingBag, Phone } from 'lucide-react';
 import { useStore } from '../context/StoreContext';
-import { BRAND_INFO, formatPKR } from '../data/products';
+import { formatPKR } from '../data/products';
 
 export const OrderSuccess: React.FC = () => {
-  const { lastOrder } = useStore();
+  const { lastOrder, buildOrderWhatsAppUrl } = useStore();
 
   if (!lastOrder) {
     return (
@@ -26,10 +26,21 @@ export const OrderSuccess: React.FC = () => {
     );
   }
 
-  const whatsappHelpMsg = `Hello Malik G Collection, I need help regarding my order ${lastOrder.orderNumber}.`;
-  const whatsappHelpUrl = `${BRAND_INFO.whatsappUrl}?text=${encodeURIComponent(
-    whatsappHelpMsg
-  )}`;
+  const whatsappOrderUrl = buildOrderWhatsAppUrl(lastOrder);
+  const snapshots =
+    lastOrder.orderItems && lastOrder.orderItems.length > 0
+      ? lastOrder.orderItems
+      : lastOrder.items.map((item) => ({
+          productId: item.product.id,
+          productNameSnapshot: item.product.name,
+          productImageSnapshot: item.product.image,
+          selectedColor: item.selectedColor || 'Standard',
+          selectedSize: item.selectedSize || 'N/A',
+          quantity: item.quantity,
+          unitPrice: item.product.price,
+          originalPriceSnapshot: item.product.oldPrice || item.product.price,
+          subtotal: item.product.price * item.quantity,
+        }));
 
   return (
     <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 py-14 sm:py-20">
@@ -43,7 +54,7 @@ export const OrderSuccess: React.FC = () => {
             ORDER PLACED SUCCESSFULLY!
           </h1>
           <p className="text-sm sm:text-base text-[#A1A1AA]">
-            Thank you for shopping with Malik G Collection.
+            Thank you for shopping with Malik G Collection. Your order has been saved in our system.
           </p>
         </div>
 
@@ -51,7 +62,7 @@ export const OrderSuccess: React.FC = () => {
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 bg-[#18181B] border border-white/10 p-5 text-sm">
           <div>
             <span className="block text-xs uppercase tracking-wider text-[#A1A1AA]">
-              Order Number
+              Order ID
             </span>
             <span className="font-mono-num text-base font-bold text-[#D4AF37]">
               {lastOrder.orderNumber}
@@ -60,10 +71,10 @@ export const OrderSuccess: React.FC = () => {
 
           <div>
             <span className="block text-xs uppercase tracking-wider text-[#A1A1AA]">
-              Payment Method
+              Order Status
             </span>
             <span className="font-semibold text-[#F5F5F0]">
-              {lastOrder.paymentMethod}
+              {lastOrder.status || 'Pending'}
             </span>
           </div>
 
@@ -85,13 +96,25 @@ export const OrderSuccess: React.FC = () => {
             </span>
           </div>
 
+          <div>
+            <span className="block text-xs uppercase tracking-wider text-[#A1A1AA]">
+              Email
+            </span>
+            <span className="text-[#F5F5F0]">{lastOrder.customer.email}</span>
+          </div>
+
+          <div>
+            <span className="block text-xs uppercase tracking-wider text-[#A1A1AA]">
+              Location / City
+            </span>
+            <span className="text-[#F5F5F0]">{lastOrder.customer.city}</span>
+          </div>
+
           <div className="sm:col-span-2">
             <span className="block text-xs uppercase tracking-wider text-[#A1A1AA]">
-              Delivery Address
+              Full Address
             </span>
-            <span className="text-[#F5F5F0]">
-              {lastOrder.customer.address}, {lastOrder.customer.city}
-            </span>
+            <span className="text-[#F5F5F0]">{lastOrder.customer.address}</span>
           </div>
         </div>
 
@@ -101,22 +124,21 @@ export const OrderSuccess: React.FC = () => {
             Ordered Items
           </h2>
           <div className="divide-y divide-white/10 border-t border-b border-white/10">
-            {lastOrder.items.map((item) => (
+            {snapshots.map((item, idx) => (
               <div
-                key={`${item.product.id}-${item.selectedSize || 'def'}`}
+                key={`${item.productId}-${idx}`}
                 className="py-3.5 flex items-center justify-between gap-4 text-sm"
               >
                 <div>
                   <span className="font-semibold text-[#F5F5F0]">
-                    {item.product.name}
+                    {item.productNameSnapshot}
                   </span>
                   <span className="block text-xs text-[#A1A1AA]">
-                    Qty: {item.quantity}
-                    {item.selectedSize ? ` · Size: ${item.selectedSize}` : ''}
+                    Color: {item.selectedColor} · Size: {item.selectedSize} · Qty: {item.quantity}
                   </span>
                 </div>
                 <span className="font-mono-num font-semibold text-[#F5F5F0]">
-                  {formatPKR(item.product.price * item.quantity)}
+                  {formatPKR(item.subtotal)}
                 </span>
               </div>
             ))}
@@ -124,19 +146,7 @@ export const OrderSuccess: React.FC = () => {
 
           {/* Total Calculation */}
           <div className="space-y-2 pt-2 text-sm">
-            <div className="flex justify-between text-[#A1A1AA]">
-              <span>Subtotal</span>
-              <span className="font-mono-num text-[#F5F5F0]">
-                {formatPKR(lastOrder.subtotal)}
-              </span>
-            </div>
-            <div className="flex justify-between text-[#A1A1AA]">
-              <span>Delivery</span>
-              <span className="font-mono-num text-[#F5F5F0]">
-                {lastOrder.delivery === 0 ? 'FREE DELIVERY' : formatPKR(lastOrder.delivery)}
-              </span>
-            </div>
-            <div className="flex justify-between text-base font-bold pt-2 border-t border-white/10">
+            <div className="flex justify-between text-base font-bold pt-2">
               <span className="text-[#F5F5F0]">Total Amount</span>
               <span className="font-mono-num text-xl text-[#D4AF37]">
                 {formatPKR(lastOrder.total)}
@@ -147,9 +157,19 @@ export const OrderSuccess: React.FC = () => {
 
         {/* Action Buttons */}
         <div className="pt-4 grid grid-cols-1 sm:grid-cols-3 gap-3">
+          <a
+            href={whatsappOrderUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex items-center justify-center gap-2 py-3.5 px-4 bg-[#D4AF37] hover:bg-[#e5c247] text-[#0B0B0C] text-xs font-bold uppercase tracking-wider text-center transition-colors"
+          >
+            <MessageCircle className="w-4 h-4 fill-current" />
+            <span>SEND ON WHATSAPP</span>
+          </a>
+
           <Link
             to="/shop"
-            className="flex items-center justify-center gap-2 py-3.5 px-4 bg-[#D4AF37] hover:bg-[#e5c247] text-[#0B0B0C] text-xs font-bold uppercase tracking-wider text-center transition-colors"
+            className="flex items-center justify-center gap-2 py-3.5 px-4 border border-white/20 hover:border-[#D4AF37] text-[#F5F5F0] hover:text-[#D4AF37] text-xs font-bold uppercase tracking-wider text-center transition-colors"
           >
             <ShoppingBag className="w-4 h-4" />
             <span>CONTINUE SHOPPING</span>
@@ -162,16 +182,6 @@ export const OrderSuccess: React.FC = () => {
             <Phone className="w-4 h-4" />
             <span>CONTACT US</span>
           </Link>
-
-          <a
-            href={whatsappHelpUrl}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="flex items-center justify-center gap-2 py-3.5 px-4 border border-[#D4AF37] text-[#D4AF37] hover:bg-[#D4AF37] hover:text-[#0B0B0C] text-xs font-bold uppercase tracking-wider text-center transition-colors"
-          >
-            <MessageCircle className="w-4 h-4" />
-            <span>ORDER HELP ON WHATSAPP</span>
-          </a>
         </div>
       </div>
     </div>

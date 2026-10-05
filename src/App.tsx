@@ -15,6 +15,7 @@ import { Checkout } from './pages/Checkout';
 import { OrderSuccess } from './pages/OrderSuccess';
 import { About } from './pages/About';
 import { Contact } from './pages/Contact';
+import { AdminPanel } from './pages/AdminPanel';
 
 const ScrollToTopAndSEO: React.FC = () => {
   const { pathname } = useLocation();
@@ -34,10 +35,11 @@ const ScrollToTopAndSEO: React.FC = () => {
       '/sale': 'Sale & Exclusive Discounts | Malik G Collection',
       '/wishlist': 'My Wishlist | Malik G Collection',
       '/cart': 'Shopping Bag | Malik G Collection',
-      '/checkout': 'Secure Checkout | Malik G Collection',
+      '/checkout': 'Complete Your Order | Malik G Collection',
       '/order-success': 'Order Confirmed | Malik G Collection',
       '/about': 'About Malik G Collection | Sialkot, Pakistan',
       '/contact': 'Contact Malik G Collection | 0321 7126828',
+      '/admin': 'Owner Admin Portal | Malik G Collection',
     };
 
     document.title =
@@ -74,41 +76,59 @@ const NotFound: React.FC = () => (
   </div>
 );
 
+const AppShell: React.FC = () => {
+  const { pathname } = useLocation();
+  const isAdminRoute = pathname.startsWith('/admin');
+
+  if (isAdminRoute) {
+    return (
+      <Routes>
+        <Route path="/admin/*" element={<AdminPanel />} />
+      </Routes>
+    );
+  }
+
+  return (
+    <div className="min-h-screen flex flex-col bg-[#0B0B0C] text-[#F5F5F0]">
+      <Header />
+      <main className="flex-1">
+        <Routes>
+          <Route path="/" element={<Home />} />
+          <Route path="/shop" element={<Shop mode="all" />} />
+          <Route path="/shirts" element={<Shop presetCategory="Shirts" />} />
+          <Route path="/pants" element={<Shop presetCategory="Pants" />} />
+          <Route path="/shoes" element={<Shop presetCategory="Shoes" />} />
+          <Route path="/watches" element={<Shop presetCategory="Watches" />} />
+          <Route path="/perfumes" element={<Shop presetCategory="Perfumes" />} />
+          <Route path="/new-arrivals" element={<Shop mode="new-arrivals" />} />
+          <Route path="/sale" element={<Shop mode="sale" />} />
+          <Route path="/product/:id" element={<ProductDetails />} />
+          <Route path="/wishlist" element={<Wishlist />} />
+          <Route path="/cart" element={<Cart />} />
+          <Route path="/checkout" element={<Checkout />} />
+          <Route path="/order-success" element={<OrderSuccess />} />
+          <Route path="/about" element={<About />} />
+          <Route path="/contact" element={<Contact />} />
+          <Route path="*" element={<NotFound />} />
+        </Routes>
+      </main>
+      <Footer />
+      <QuickViewModal />
+      <SearchModal />
+      <FloatingActions />
+    </div>
+  );
+};
+
 export default function App() {
   return (
     <BrowserRouter>
       <StoreProvider>
         <ScrollToTopAndSEO />
-        <div className="min-h-screen flex flex-col bg-[#0B0B0C] text-[#F5F5F0]">
-          <Header />
-          <main className="flex-1">
-            <Routes>
-              <Route path="/" element={<Home />} />
-              <Route path="/shop" element={<Shop mode="all" />} />
-              <Route path="/shirts" element={<Shop presetCategory="Shirts" />} />
-              <Route path="/pants" element={<Shop presetCategory="Pants" />} />
-              <Route path="/shoes" element={<Shop presetCategory="Shoes" />} />
-              <Route path="/watches" element={<Shop presetCategory="Watches" />} />
-              <Route path="/perfumes" element={<Shop presetCategory="Perfumes" />} />
-              <Route path="/new-arrivals" element={<Shop mode="new-arrivals" />} />
-              <Route path="/sale" element={<Shop mode="sale" />} />
-              <Route path="/product/:id" element={<ProductDetails />} />
-              <Route path="/wishlist" element={<Wishlist />} />
-              <Route path="/cart" element={<Cart />} />
-              <Route path="/checkout" element={<Checkout />} />
-              <Route path="/order-success" element={<OrderSuccess />} />
-              <Route path="/about" element={<About />} />
-              <Route path="/contact" element={<Contact />} />
-              <Route path="*" element={<NotFound />} />
-            </Routes>
-          </main>
-          <Footer />
-          <QuickViewModal />
-          <SearchModal />
-          <FloatingActions />
-        </div>
+        <AppShell />
       </StoreProvider>
     </BrowserRouter>
   );
 }
+
 

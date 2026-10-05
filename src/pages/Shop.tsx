@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useSearchParams, Link } from 'react-router-dom';
 import { SlidersHorizontal, X, Search } from 'lucide-react';
-import { PRODUCTS, calculateDiscountPercentage } from '../data/products';
+import { calculateDiscountPercentage } from '../data/products';
+import { useStore } from '../context/StoreContext';
 import { CategoryType } from '../types';
 import { ProductCard } from '../components/ProductCard';
 
@@ -27,6 +28,7 @@ const PANTS_SIZES = ['30', '32', '34', '36', '38', '40'];
 const SHOE_SIZES = ['39', '40', '41', '42', '43', '44'];
 
 export const Shop: React.FC<ShopProps> = ({ presetCategory, mode = 'all' }) => {
+  const { products } = useStore();
   const [searchParams, setSearchParams] = useSearchParams();
   const initialQuery = searchParams.get('q') || '';
 
@@ -66,7 +68,7 @@ export const Shop: React.FC<ShopProps> = ({ presetCategory, mode = 'all' }) => {
   };
 
   const filteredProducts = useMemo(() => {
-    return PRODUCTS.filter((product) => {
+    return products.filter((product) => {
       // Mode filter (New Arrivals or Sale)
       if (mode === 'new-arrivals' && !product.isNewArrival) {
         return false;
@@ -119,7 +121,7 @@ export const Shop: React.FC<ShopProps> = ({ presetCategory, mode = 'all' }) => {
       // featured
       return (b.isTrending ? 1 : 0) - (a.isTrending ? 1 : 0);
     });
-  }, [mode, selectedCategory, priceRange, selectedSize, sortBy, searchQuery]);
+  }, [products, mode, selectedCategory, priceRange, selectedSize, sortBy, searchQuery]);
 
   // Page Heading & Subtitle
   const pageTitle = useMemo(() => {
@@ -285,8 +287,8 @@ export const Shop: React.FC<ShopProps> = ({ presetCategory, mode = 'all' }) => {
                     <span>{cat}</span>
                     <span className="font-mono-num text-xs opacity-80">
                       {cat === 'All'
-                        ? PRODUCTS.length
-                        : PRODUCTS.filter((p) => p.category === cat).length}
+                        ? products.length
+                        : products.filter((p) => p.category === cat).length}
                     </span>
                   </button>
                 );

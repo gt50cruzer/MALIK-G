@@ -1,19 +1,12 @@
 import { Product, CategoryType } from '../types';
-import imgHero from '../assets/images/hero_mens_fashion_luxury_1791172403012.jpg';
-import imgStorefront from '../assets/images/storefront_malik_g_collection_1791172413877.jpg';
-import imgShirts from '../assets/images/category_shirts_collection_1791172424951.jpg';
-import imgPants from '../assets/images/category_pants_collection_1791172435925.jpg';
-import imgShoes from '../assets/images/category_shoes_collection_1791172445423.jpg';
-import imgWatches from '../assets/images/category_watches_collection_1791172455398.jpg';
-import imgPerfumes from '../assets/images/category_perfumes_collection_1791172466019.jpg';
 
-const IMG_SHIRTS = imgShirts;
-const IMG_PANTS = imgPants;
-const IMG_SHOES = imgShoes;
-const IMG_WATCHES = imgWatches;
-const IMG_PERFUMES = imgPerfumes;
-const IMG_HERO = imgHero;
-const IMG_STOREFRONT = imgStorefront;
+const IMG_SHIRTS = '/uploads/category_shirts.jpg';
+const IMG_PANTS = '/uploads/category_pants.jpg';
+const IMG_SHOES = '/uploads/category_shoes.jpg';
+const IMG_WATCHES = '/uploads/category_watches.jpg';
+const IMG_PERFUMES = '/uploads/category_perfumes.jpg';
+const IMG_HERO = '/uploads/hero_mens_fashion_luxury.jpg';
+const IMG_STOREFRONT = '/uploads/storefront_malik_g_collection.jpg';
 
 export const BRAND_INFO = {
   name: 'MALIK G COLLECTION',
@@ -23,8 +16,6 @@ export const BRAND_INFO = {
   whatsappUrl: 'https://wa.me/923217126828',
   location: 'Sialkot, Punjab, Pakistan',
   shortLocation: 'Sialkot, Pakistan',
-  freeDeliveryThreshold: 5000,
-  standardDeliveryFee: 250,
   googleMapsUrl: 'https://www.google.com/maps/search/?api=1&query=Malik+G+Collection+Sialkot+Pakistan',
   storefrontImage: IMG_STOREFRONT,
   heroImage: IMG_HERO,
@@ -712,11 +703,24 @@ export const PRODUCTS: Product[] = [
   },
 ];
 
+export const INITIAL_PRODUCTS: Product[] = PRODUCTS.map((p) => {
+  const computedOldPrice = p.oldPrice || Math.round(p.price / 0.8);
+  return {
+    ...p,
+    oldPrice: computedOldPrice,
+    originalPrice: computedOldPrice,
+    offerPrice: p.price,
+    discountPercent: 20,
+    published: p.published !== undefined ? p.published : true,
+  };
+});
+
 export function formatPKR(amount: number): string {
-  return `Rs. ${amount.toLocaleString('en-PK')}`;
+  return `Rs. ${Math.round(amount).toLocaleString('en-PK')}`;
 }
 
 export function calculateDiscountPercentage(price: number, oldPrice?: number): number | null {
   if (!oldPrice || oldPrice <= price) return null;
   return Math.round(((oldPrice - price) / oldPrice) * 100);
 }
+

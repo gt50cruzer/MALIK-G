@@ -15,6 +15,7 @@ export const QuickViewModal: React.FC = () => {
   } = useStore();
 
   const [selectedSize, setSelectedSize] = useState<string>('');
+  const [selectedColor, setSelectedColor] = useState<string>('');
   const [quantity, setQuantity] = useState<number>(1);
   const [sizeError, setSizeError] = useState<string>('');
 
@@ -23,6 +24,11 @@ export const QuickViewModal: React.FC = () => {
       setSelectedSize(
         quickViewProduct.sizes && quickViewProduct.sizes.length > 0
           ? quickViewProduct.sizes[0]
+          : ''
+      );
+      setSelectedColor(
+        quickViewProduct.colors && quickViewProduct.colors.length > 0
+          ? quickViewProduct.colors[0].name
           : ''
       );
       setQuantity(1);
@@ -54,7 +60,12 @@ export const QuickViewModal: React.FC = () => {
       return;
     }
     setSizeError('');
-    addToCart(quickViewProduct, quantity, selectedSize || undefined);
+    addToCart(
+      quickViewProduct,
+      quantity,
+      selectedSize || undefined,
+      selectedColor || undefined
+    );
     setQuickViewProduct(null);
   };
 
@@ -128,6 +139,35 @@ export const QuickViewModal: React.FC = () => {
             <p className="text-sm text-[#A1A1AA] leading-relaxed">
               {quickViewProduct.shortDescription}
             </p>
+
+            {/* Color Selector */}
+            {quickViewProduct.colors && quickViewProduct.colors.length > 0 && (
+              <div className="pt-2 space-y-2">
+                <span className="block text-xs uppercase tracking-wider text-[#A1A1AA]">
+                  Select Color: <strong className="text-[#F5F5F0]">{selectedColor}</strong>
+                </span>
+                <div className="flex flex-wrap gap-2">
+                  {quickViewProduct.colors.map((c) => (
+                    <button
+                      key={c.name}
+                      type="button"
+                      onClick={() => setSelectedColor(c.name)}
+                      className={`inline-flex items-center gap-1.5 px-3 py-1.5 text-xs border transition-colors ${
+                        selectedColor === c.name
+                          ? 'border-[#D4AF37] bg-[#D4AF37]/15 text-[#F5F5F0] font-bold'
+                          : 'border-white/15 bg-[#18181B] text-[#A1A1AA] hover:text-[#F5F5F0]'
+                      }`}
+                    >
+                      <span
+                        className="w-3 h-3 rounded-full border border-white/30"
+                        style={{ backgroundColor: c.hex }}
+                      />
+                      <span>{c.name}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
 
             {/* Size Selector */}
             {quickViewProduct.sizes && quickViewProduct.sizes.length > 0 && (

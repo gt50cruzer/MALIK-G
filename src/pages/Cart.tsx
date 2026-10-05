@@ -1,8 +1,8 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
-import { ShoppingBag, Trash2, ArrowRight, Truck } from 'lucide-react';
+import { ShoppingBag, Trash2, ArrowRight } from 'lucide-react';
 import { useStore } from '../context/StoreContext';
-import { BRAND_INFO, formatPKR } from '../data/products';
+import { formatPKR } from '../data/products';
 import { SafeImage } from '../components/SafeImage';
 
 export const Cart: React.FC = () => {
@@ -12,7 +12,6 @@ export const Cart: React.FC = () => {
     removeFromCart,
     cartSubtotal,
     cartDiscountTotal,
-    deliveryFee,
     grandTotal,
   } = useStore();
 
@@ -41,11 +40,6 @@ export const Cart: React.FC = () => {
     );
   }
 
-  const remainingForFreeDelivery = Math.max(
-    0,
-    BRAND_INFO.freeDeliveryThreshold - cartSubtotal
-  );
-
   return (
     <div className="max-w-[1440px] mx-auto px-4 sm:px-6 lg:px-8 py-10 sm:py-14 space-y-10">
       <div className="border-b border-white/10 pb-6 flex flex-col sm:flex-row sm:items-end justify-between gap-4">
@@ -65,25 +59,11 @@ export const Cart: React.FC = () => {
         </Link>
       </div>
 
-      {/* Free Delivery Progress Notice */}
-      <div className="bg-[#121214] border border-white/10 p-4 flex items-center gap-3 text-xs sm:text-sm">
-        <Truck className="w-5 h-5 text-[#D4AF37] shrink-0" />
-        {remainingForFreeDelivery === 0 ? (
-          <p className="text-[#F5F5F0]">
-            Your order qualifies for <strong className="text-[#D4AF37]">FREE DELIVERY</strong> nationwide!
-          </p>
-        ) : (
-          <p className="text-[#A1A1AA]">
-            Add <strong className="text-[#F5F5F0] font-mono-num">{formatPKR(remainingForFreeDelivery)}</strong> more to unlock <strong className="text-[#D4AF37]">FREE DELIVERY</strong> (Orders above Rs. 5,000).
-          </p>
-        )}
-      </div>
-
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 lg:gap-12">
         {/* Left: Cart Items List */}
         <div className="lg:col-span-8 space-y-4">
           {cart.map((item) => {
-            const itemKey = `${item.product.id}-${item.selectedSize || 'default'}`;
+            const itemKey = `${item.product.id}-${item.selectedSize || 'default'}-${item.selectedColor || 'default'}`;
             const lineSubtotal = item.product.price * item.quantity;
 
             return (
@@ -115,20 +95,27 @@ export const Cart: React.FC = () => {
                     </Link>
 
                     <div className="flex flex-wrap items-center gap-3 text-xs text-[#A1A1AA] pt-1">
-                      {item.selectedSize && (
-                        <span>
-                          Size: <strong className="text-[#F5F5F0] font-mono-num">{item.selectedSize}</strong>
-                        </span>
-                      )}
                       {item.selectedColor && (
                         <span>
                           Color: <strong className="text-[#F5F5F0]">{item.selectedColor}</strong>
                         </span>
                       )}
+                      {item.selectedSize && (
+                        <span>
+                          Size: <strong className="text-[#F5F5F0] font-mono-num">{item.selectedSize}</strong>
+                        </span>
+                      )}
                     </div>
 
-                    <div className="pt-1 font-mono-num text-sm text-[#D4AF37] font-semibold">
-                      {formatPKR(item.product.price)}
+                    <div className="pt-1 flex items-baseline gap-2 font-mono-num">
+                      <span className="text-sm text-[#D4AF37] font-semibold">
+                        {formatPKR(item.product.price)}
+                      </span>
+                      {item.product.oldPrice && (
+                        <span className="text-xs text-[#A1A1AA] line-through">
+                          {formatPKR(item.product.oldPrice)}
+                        </span>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -140,7 +127,12 @@ export const Cart: React.FC = () => {
                     <button
                       type="button"
                       onClick={() =>
-                        updateCartQuantity(item.product.id, item.selectedSize, -1)
+                        updateCartQuantity(
+                          item.product.id,
+                          item.selectedSize,
+                          item.selectedColor,
+                          -1
+                        )
                       }
                       className="w-9 h-9 flex items-center justify-center text-[#F5F5F0] hover:text-[#D4AF37] transition-colors"
                       aria-label="Decrease quantity"
@@ -153,7 +145,12 @@ export const Cart: React.FC = () => {
                     <button
                       type="button"
                       onClick={() =>
-                        updateCartQuantity(item.product.id, item.selectedSize, 1)
+                        updateCartQuantity(
+                          item.product.id,
+                          item.selectedSize,
+                          item.selectedColor,
+                          1
+                        )
                       }
                       className="w-9 h-9 flex items-center justify-center text-[#F5F5F0] hover:text-[#D4AF37] transition-colors"
                       aria-label="Increase quantity"
@@ -175,7 +172,13 @@ export const Cart: React.FC = () => {
                   {/* Remove Button */}
                   <button
                     type="button"
-                    onClick={() => removeFromCart(item.product.id, item.selectedSize)}
+                    onClick={() =>
+                      removeFromCart(
+                        item.product.id,
+                        item.selectedSize,
+                        item.selectedColor
+                      )
+                    }
                     className="p-2 text-[#A1A1AA] hover:text-red-400 transition-colors"
                     aria-label={`Remove ${item.product.name} from cart`}
                   >
@@ -187,7 +190,7 @@ export const Cart: React.FC = () => {
           })}
         </div>
 
-        {/* Right: Order Summary Box */}
+        {/* Right: Order Summary Box (No Delivery Fee) */}
         <div className="lg:col-span-4">
           <div className="bg-[#121214] border border-white/10 p-6 sm:p-8 space-y-6 sticky top-28">
             <h2 className="font-display text-2xl font-bold text-[#F5F5F0] border-b border-white/10 pb-4">
@@ -204,33 +207,16 @@ export const Cart: React.FC = () => {
 
               {cartDiscountTotal > 0 && (
                 <div className="flex items-center justify-between text-[#A1A1AA]">
-                  <span>Discount Savings</span>
+                  <span>Offer Savings</span>
                   <span className="font-mono-num text-[#D4AF37]">
                     -{formatPKR(cartDiscountTotal)}
                   </span>
                 </div>
               )}
 
-              <div className="flex items-center justify-between text-[#A1A1AA]">
-                <span>Delivery</span>
-                <span className="font-mono-num text-[#F5F5F0] font-semibold">
-                  {deliveryFee === 0 ? (
-                    <span className="text-[#D4AF37]">FREE DELIVERY</span>
-                  ) : (
-                    formatPKR(deliveryFee)
-                  )}
-                </span>
-              </div>
-
-              <div className="text-[11px] text-[#A1A1AA] pt-1">
-                {deliveryFee === 0
-                  ? 'Orders above Rs. 5,000 receive Free Delivery.'
-                  : 'Standard Rs. 250 delivery applies to orders below Rs. 5,000.'}
-              </div>
-
               <div className="pt-4 border-t border-white/10 flex items-baseline justify-between">
                 <span className="text-base font-bold text-[#F5F5F0] uppercase tracking-wider">
-                  Grand Total
+                  Total
                 </span>
                 <span className="font-mono-num text-xl sm:text-2xl font-bold text-[#D4AF37]">
                   {formatPKR(grandTotal)}

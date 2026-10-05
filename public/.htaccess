@@ -1,0 +1,18 @@
+<IfModule mod_rewrite.c>
+  RewriteEngine On
+  RewriteBase /
+
+  # Allow direct access to /api/ PHP endpoints and /uploads/ images
+  RewriteRule ^api/ - [L]
+  RewriteRule ^uploads/ - [L]
+
+  # Block direct web access to /config/
+  RewriteRule ^config/ - [F,L]
+
+  # Serve existing files and directories directly
+  RewriteCond %{REQUEST_FILENAME} !-f
+  RewriteCond %{REQUEST_FILENAME} !-d
+
+  # Route all frontend & /admin SPA paths to index.html
+  RewriteRule . /index.html [L]
+</IfModule>

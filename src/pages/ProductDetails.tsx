@@ -11,7 +11,6 @@ import {
   ArrowLeft,
 } from 'lucide-react';
 import {
-  PRODUCTS,
   BRAND_INFO,
   formatPKR,
   calculateDiscountPercentage,
@@ -24,6 +23,7 @@ export const ProductDetails: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const {
+    products,
     addToCart,
     toggleWishlist,
     isInWishlist,
@@ -31,7 +31,7 @@ export const ProductDetails: React.FC = () => {
     recentlyViewed,
   } = useStore();
 
-  const product = PRODUCTS.find((p) => p.id === id);
+  const product = products.find((p) => p.id === id);
 
   const [selectedImage, setSelectedImage] = useState<string>('');
   const [selectedSize, setSelectedSize] = useState<string>('');
@@ -103,18 +103,25 @@ export const ProductDetails: React.FC = () => {
     }
   };
 
+  const productPageUrl =
+    typeof window !== 'undefined'
+      ? `${window.location.origin}/product/${product.id}`
+      : `/product/${product.id}`;
+
   const whatsappMessage = `Hello Malik G Collection, I am interested in ${product.name}${
-    selectedSize ? ` (Size: ${selectedSize})` : ''
-  }. Please share availability and details.`;
+    selectedColor ? ` | Color: ${selectedColor}` : ''
+  }${selectedSize ? ` | Size: ${selectedSize}` : ''} (${formatPKR(
+    product.price
+  )}). Product Link: ${productPageUrl} — Please share availability and details.`;
   const whatsappUrl = `${BRAND_INFO.whatsappUrl}?text=${encodeURIComponent(whatsappMessage)}`;
 
-  const relatedProducts = PRODUCTS.filter(
-    (p) => p.category === product.category && p.id !== product.id
-  ).slice(0, 4);
+  const relatedProducts = products
+    .filter((p) => p.category === product.category && p.id !== product.id)
+    .slice(0, 4);
 
   const recentProducts = recentlyViewed
     .filter((rId) => rId !== product.id)
-    .map((rId) => PRODUCTS.find((p) => p.id === rId))
+    .map((rId) => products.find((p) => p.id === rId))
     .filter(Boolean)
     .slice(0, 4);
 
@@ -384,9 +391,9 @@ export const ProductDetails: React.FC = () => {
                 <Truck className="w-4 h-4 text-[#D4AF37] shrink-0 mt-0.5" />
                 <div>
                   <span className="block text-[#F5F5F0] font-semibold">
-                    Free Delivery Over Rs. 5,000
+                    Nationwide Dispatch
                   </span>
-                  <span>Rs. 250 standard delivery on orders below Rs. 5,000.</span>
+                  <span>Fast courier dispatch from our Sialkot flagship store.</span>
                 </div>
               </div>
               <div className="flex items-start gap-3">

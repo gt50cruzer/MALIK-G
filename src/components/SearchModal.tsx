@@ -2,13 +2,13 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Search, X, ArrowRight } from 'lucide-react';
 import { useStore } from '../context/StoreContext';
-import { PRODUCTS, formatPKR } from '../data/products';
+import { formatPKR } from '../data/products';
 import { SafeImage } from './SafeImage';
 
 const SUGGESTED_TERMS = ['shirt', 'black shirt', 'shoes', 'watch', 'perfume', 'pants', 'denim'];
 
 export const SearchModal: React.FC = () => {
-  const { searchOpen, setSearchOpen } = useStore();
+  const { products, searchOpen, setSearchOpen } = useStore();
   const [query, setQuery] = useState('');
   const inputRef = useRef<HTMLInputElement>(null);
   const navigate = useNavigate();
@@ -36,7 +36,7 @@ export const SearchModal: React.FC = () => {
   const trimmed = query.trim().toLowerCase();
 
   const matchingProducts = trimmed
-    ? PRODUCTS.filter((p) => {
+    ? products.filter((p) => {
         const inName = p.name.toLowerCase().includes(trimmed);
         const inCategory = p.category.toLowerCase().includes(trimmed);
         const inDesc =

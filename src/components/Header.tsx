@@ -38,7 +38,7 @@ export const Header: React.FC = () => {
       <div className="bg-[#121214] border-b border-white/5 text-xs text-[#A1A1AA] py-2 px-4 sm:px-6 lg:px-8">
         <div className="max-w-[1440px] mx-auto flex flex-wrap items-center justify-between gap-2">
           <p className="tracking-wider uppercase font-medium text-[#F5F5F0] text-[11px] sm:text-xs">
-            FREE DELIVERY ON ORDERS ABOVE RS. 5,000
+            MALIK G COLLECTION · SIALKOT, PAKISTAN · UP TO 20% OFF SELECTED ITEMS
           </p>
           <div className="flex items-center gap-4 text-[11px] sm:text-xs">
             <a

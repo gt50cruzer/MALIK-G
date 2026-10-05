@@ -89,16 +89,16 @@ export const About: React.FC = () => {
               desc: 'Every shirt, trouser, shoe, watch, and fragrance is selected for durability, fit, and refined presentation.',
             },
             {
-              title: 'Free Delivery Over Rs. 5,000',
-              desc: 'Enjoy complimentary nationwide delivery on orders above Rs. 5,000, or flat Rs. 250 standard shipping.',
+              title: 'Nationwide Dispatch',
+              desc: 'Every order is carefully inspected and packed at our Sialkot store for fast delivery across Pakistan.',
             },
             {
-              title: 'Cash on Delivery',
-              desc: 'Shop with confidence across Pakistan and pay conveniently at your doorstep upon receiving your order.',
+              title: 'Instant Order Tracking',
+              desc: 'Receive a unique Malik G Collection Order ID (MGC-XXXXXX) saved directly in our system upon checkout.',
             },
             {
-              title: 'Direct WhatsApp Support',
-              desc: 'Speak directly with our Sialkot store team on WhatsApp at 0321 7126828 for sizing advice or quick orders.',
+              title: 'Direct WhatsApp Ordering',
+              desc: 'Place your order seamlessly on our website and confirm directly with our Sialkot team on WhatsApp at 0321 7126828.',
             },
           ].map((item) => (
             <div key={item.title} className="space-y-2 border-l-2 border-[#D4AF37] pl-4">

@@ -1,15 +1,17 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
-import { ArrowRight, MapPin, Phone, ShieldCheck, Truck, Sparkles } from 'lucide-react';
-import { BRAND_INFO, CATEGORY_CARDS, PRODUCTS } from '../data/products';
+import { ArrowRight, MapPin, Phone } from 'lucide-react';
+import { BRAND_INFO, CATEGORY_CARDS } from '../data/products';
+import { useStore } from '../context/StoreContext';
 import { ProductCard } from '../components/ProductCard';
 import { SafeImage } from '../components/SafeImage';
 
 export const Home: React.FC = () => {
-  // Display 8 trending/featured products
-  const trendingProducts = PRODUCTS.filter((p) => p.isTrending).slice(0, 8);
+  const { products } = useStore();
+  // Display 8 trending/featured products from live catalog
+  const trendingProducts = products.filter((p) => p.isTrending).slice(0, 8);
   const displayProducts =
-    trendingProducts.length >= 8 ? trendingProducts : PRODUCTS.slice(0, 8);
+    trendingProducts.length >= 8 ? trendingProducts : products.slice(0, 8);
 
   const scrollToCategories = () => {
     const el = document.getElementById('featured-categories');
@@ -73,16 +75,16 @@ export const Home: React.FC = () => {
             {/* Subtle Value Assurances */}
             <div className="pt-8 border-t border-white/10 grid grid-cols-3 gap-4 text-xs text-[#A1A1AA]">
               <div>
-                <span className="block text-[#F5F5F0] font-semibold">Free Delivery</span>
-                <span>Orders above Rs. 5,000</span>
+                <span className="block text-[#F5F5F0] font-semibold">Premium Quality</span>
+                <span>Curated Menswear &amp; Luxury</span>
               </div>
               <div>
-                <span className="block text-[#F5F5F0] font-semibold">Cash on Delivery</span>
-                <span>Nationwide in Pakistan</span>
+                <span className="block text-[#F5F5F0] font-semibold">Nationwide Dispatch</span>
+                <span>All Cities Across Pakistan</span>
               </div>
               <div>
                 <span className="block text-[#F5F5F0] font-semibold">Sialkot Flagship</span>
-                <span>Direct WhatsApp Concierge</span>
+                <span>Direct WhatsApp Ordering</span>
               </div>
             </div>
           </div>
@@ -191,7 +193,7 @@ export const Home: React.FC = () => {
             to="/shop"
             className="inline-flex items-center gap-2 px-8 py-4 border border-[#D4AF37] text-[#D4AF37] hover:bg-[#D4AF37] hover:text-[#0B0B0C] text-xs sm:text-sm font-bold uppercase tracking-[0.15em] transition-colors"
           >
-            <span>Explore Complete Collection (30 Products)</span>
+            <span>Explore Complete Collection ({products.length} Products)</span>
             <ArrowRight className="w-4 h-4" />
           </Link>
         </div>

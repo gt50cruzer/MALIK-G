@@ -1,6 +1,12 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
-import { Product, CartItemType, Order, OrderCustomerDetails, ContactSubmission } from '../types';
-import { BRAND_INFO } from '../data/products';
+import {
+  Product,
+  CartItemType,
+  Order,
+  OrderCustomerDetails,
+  ContactSubmission,
+} from '../types';
+import { BRAND_INFO, INITIAL_PRODUCTS, formatPKR } from '../data/products';
 
 interface ToastMessage {
   id: string;
@@ -9,9 +15,12 @@ interface ToastMessage {
 }
 
 interface StoreContextType {
+  products: Product[];
+  categories: string[];
+  refreshCatalog: () => Promise<void>;
   cart: CartItemType[];
-  wishlist: string[]; // Product IDs
-  recentlyViewed: string[]; // Product IDs
+  wishlist: string[];
+  recentlyViewed: string[];
   orders: Order[];
   lastOrder: Order | null;
   savedCustomer: OrderCustomerDetails | null;
@@ -22,9 +31,23 @@ interface StoreContextType {
   toasts: ToastMessage[];
   showToast: (message: string, type?: 'success' | 'error' | 'info') => void;
   removeToast: (id: string) => void;
-  addToCart: (product: Product, quantity?: number, selectedSize?: string, selectedColor?: string) => boolean;
-  updateCartQuantity: (productId: string, selectedSize: string | undefined, delta: number) => void;
-  removeFromCart: (productId: string, selectedSize?: string) => void;
+  addToCart: (
+    product: Product,
+    quantity?: number,
+    selectedSize?: string,
+    selectedColor?: string
+  ) => boolean;
+  updateCartQuantity: (
+    productId: string,
+    selectedSize: string | undefined,
+    selectedColor: string | undefined,
+    delta: number
+  ) => void;
+  removeFromCart: (
+    productId: string,
+    selectedSize?: string,
+    selectedColor?: string
+  ) => void;
   clearCart: () => void;
   toggleWishlist: (product: Product) => void;
   isInWishlist: (productId: string) => boolean;
@@ -32,25 +55,22 @@ interface StoreContextType {
   cartCount: number;
   cartSubtotal: number;
   cartDiscountTotal: number;
-  deliveryFee: number;
   grandTotal: number;
-  placeOrder: (
-    customer: OrderCustomerDetails,
-    paymentMethod: 'Cash on Delivery' | 'Bank Transfer / WhatsApp'
-  ) => Order;
+  placeOrder: (customer: OrderCustomerDetails) => Promise<{ order: Order; whatsappUrl: string }>;
+  buildOrderWhatsAppUrl: (order: Order) => string;
   saveContactMessage: (submission: Omit<ContactSubmission, 'id' | 'createdAt'>) => void;
 }
 
 const StoreContext = createContext<StoreContextType | undefined>(undefined);
 
 const STORAGE_KEYS = {
-  CART: 'malik_g_cart_v1',
-  WISHLIST: 'malik_g_wishlist_v1',
-  RECENT: 'malik_g_recently_viewed_v1',
-  ORDERS: 'malik_g_orders_v1',
-  LAST_ORDER: 'malik_g_last_order_v1',
-  CUSTOMER: 'malik_g_customer_v1',
-  MESSAGES: 'malik_g_contact_messages_v1',
+  CART: 'malik_g_cart_v2',
+  WISHLIST: 'malik_g_wishlist_v2',
+  RECENT: 'malik_g_recently_viewed_v2',
+  ORDERS: 'malik_g_orders_v2',
+  LAST_ORDER: 'malik_g_last_order_v2',
+  CUSTOMER: 'malik_g_customer_v2',
+  MESSAGES: 'malik_g_contact_messages_v2',
 };
 
 function loadFromStorage<T>(key: string, fallback: T): T {
@@ -63,9 +83,76 @@ function loadFromStorage<T>(key: string, fallback: T): T {
   }
 }
 
+export function buildWhatsAppOrderMessage(order: Order): string {
+  const origin = typeof window !== 'undefined' ? window.location.origin : '';
+  const lines: string[] = [
+    'Hello Malik G Collection,',
+    '',
+    'I want to place an order.',
+    '',
+    `Order ID: ${order.orderNumber}`,
+    '',
+    'Customer Information:',
+    `Name: ${order.customer.fullName}`,
+    `Phone: ${order.customer.phone}`,
+    `Email: ${order.customer.email}`,
+    `Location: ${order.customer.city}`,
+    `Address: ${order.customer.address}`,
+  ];
+
+  if (order.customer.notes) {
+    lines.push(`Note: ${order.customer.notes}`);
+  }
+
+  lines.push('', 'Order:');
+
+  const snapshots = order.orderItems && order.orderItems.length > 0
+    ? order.orderItems
+    : order.items.map((item) => ({
+        productId: item.product.id,
+        productNameSnapshot: item.product.name,
+        productImageSnapshot: item.product.image,
+        selectedColor: item.selectedColor || 'Standard',
+        selectedSize: item.selectedSize || 'N/A',
+        quantity: item.quantity,
+        unitPrice: item.product.price,
+        originalPriceSnapshot: item.product.oldPrice || item.product.price,
+        subtotal: item.product.price * item.quantity,
+      }));
+
+  snapshots.forEach((item, index) => {
+    const productUrl = `${origin}/product/${item.productId}`;
+    lines.push(`${index + 1}. ${item.productNameSnapshot}`);
+    lines.push(`Color: ${item.selectedColor || 'Standard'}`);
+    lines.push(`Size: ${item.selectedSize || 'N/A'}`);
+    lines.push(`Quantity: ${item.quantity}`);
+    lines.push(`Price: ${formatPKR(item.unitPrice)} (Subtotal: ${formatPKR(item.subtotal)})`);
+    lines.push(`Product Link: ${productUrl}`);
+    lines.push('');
+  });
+
+  lines.push(`Total: ${formatPKR(order.total)}`);
+  lines.push('');
+  lines.push('Please confirm my order.');
+
+  return lines.join('\n');
+}
+
 export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const [products, setProducts] = useState<Product[]>(INITIAL_PRODUCTS);
+  const [categories, setCategories] = useState<string[]>([
+    'Shirts',
+    'Pants',
+    'Shoes',
+    'Watches',
+    'Perfumes',
+    'Accessories',
+  ]);
+
   const [cart, setCart] = useState<CartItemType[]>(() => loadFromStorage(STORAGE_KEYS.CART, []));
-  const [wishlist, setWishlist] = useState<string[]>(() => loadFromStorage(STORAGE_KEYS.WISHLIST, []));
+  const [wishlist, setWishlist] = useState<string[]>(() =>
+    loadFromStorage(STORAGE_KEYS.WISHLIST, [])
+  );
   const [recentlyViewed, setRecentlyViewed] = useState<string[]>(() =>
     loadFromStorage(STORAGE_KEYS.RECENT, [])
   );
@@ -81,11 +168,51 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   const [quickViewProduct, setQuickViewProduct] = useState<Product | null>(null);
   const [toasts, setToasts] = useState<ToastMessage[]>([]);
 
+  const refreshCatalog = useCallback(async () => {
+    try {
+      const [prodRes, catRes] = await Promise.all([
+        fetch('/api/products.php', { credentials: 'include' }),
+        fetch('/api/categories.php', { credentials: 'include' }),
+      ]);
+      if (prodRes.ok) {
+        const data = await prodRes.json();
+        if (data.success && Array.isArray(data.products) && data.products.length > 0) {
+          // Map any relative /uploads/category_*.jpg paths to bundled high-res fallback if needed
+          const hydrated: Product[] = data.products.map((p: Product) => {
+            const seedMatch = INITIAL_PRODUCTS.find((sp) => sp.id === p.id);
+            const resolvedImage =
+              p.image && p.image.startsWith('/uploads/category_') && seedMatch
+                ? seedMatch.image
+                : p.image;
+            return {
+              ...p,
+              image: resolvedImage,
+              gallery: [resolvedImage],
+            };
+          });
+          setProducts(hydrated);
+        }
+      }
+      if (catRes.ok) {
+        const catData = await catRes.json();
+        if (catData.success && Array.isArray(catData.categories)) {
+          setCategories(catData.categories.map((c: { name: string }) => c.name));
+        }
+      }
+    } catch {
+      // Fallback to INITIAL_PRODUCTS if offline
+    }
+  }, []);
+
+  useEffect(() => {
+    refreshCatalog();
+  }, [refreshCatalog]);
+
   useEffect(() => {
     try {
       localStorage.setItem(STORAGE_KEYS.CART, JSON.stringify(cart));
     } catch {
-      // ignore storage errors
+      // ignore
     }
   }, [cart]);
 
@@ -137,25 +264,38 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   );
 
   const addToCart = useCallback(
-    (product: Product, quantity = 1, selectedSize?: string, selectedColor?: string): boolean => {
+    (
+      product: Product,
+      quantity = 1,
+      selectedSize?: string,
+      selectedColor?: string
+    ): boolean => {
       if (!product.inStock) {
         showToast(`${product.name} is currently out of stock.`, 'error');
         return false;
       }
 
       const finalSize =
-        selectedSize || (product.sizes && product.sizes.length > 0 ? product.sizes[0] : undefined);
+        selectedSize ||
+        (product.sizes && product.sizes.length > 0 ? product.sizes[0] : 'N/A');
       const finalColor =
-        selectedColor || (product.colors && product.colors.length > 0 ? product.colors[0].name : undefined);
+        selectedColor ||
+        (product.colors && product.colors.length > 0
+          ? product.colors[0].name
+          : 'Standard');
 
       setCart((prev) => {
         const existingIndex = prev.findIndex(
-          (item) => item.product.id === product.id && item.selectedSize === finalSize
+          (item) =>
+            item.product.id === product.id &&
+            item.selectedSize === finalSize &&
+            item.selectedColor === finalColor
         );
         if (existingIndex > -1) {
           const updated = [...prev];
           updated[existingIndex] = {
             ...updated[existingIndex],
+            product, // ensure current price snapshot
             quantity: updated[existingIndex].quantity + quantity,
           };
           return updated;
@@ -178,11 +318,20 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   );
 
   const updateCartQuantity = useCallback(
-    (productId: string, selectedSize: string | undefined, delta: number) => {
+    (
+      productId: string,
+      selectedSize: string | undefined,
+      selectedColor: string | undefined,
+      delta: number
+    ) => {
       setCart((prev) =>
         prev
           .map((item) => {
-            if (item.product.id === productId && item.selectedSize === selectedSize) {
+            if (
+              item.product.id === productId &&
+              item.selectedSize === selectedSize &&
+              (selectedColor === undefined || item.selectedColor === selectedColor)
+            ) {
               const nextQty = item.quantity + delta;
               return nextQty > 0 ? { ...item, quantity: nextQty } : null;
             }
@@ -195,9 +344,16 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   );
 
   const removeFromCart = useCallback(
-    (productId: string, selectedSize?: string) => {
+    (productId: string, selectedSize?: string, selectedColor?: string) => {
       setCart((prev) =>
-        prev.filter((item) => !(item.product.id === productId && item.selectedSize === selectedSize))
+        prev.filter(
+          (item) =>
+            !(
+              item.product.id === productId &&
+              item.selectedSize === selectedSize &&
+              (selectedColor === undefined || item.selectedColor === selectedColor)
+            )
+        )
       );
       showToast('Item removed from your cart.', 'info');
     },
@@ -238,7 +394,10 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
   const cartCount = cart.reduce((sum, item) => sum + item.quantity, 0);
 
-  const cartSubtotal = cart.reduce((sum, item) => sum + item.product.price * item.quantity, 0);
+  const cartSubtotal = cart.reduce(
+    (sum, item) => sum + item.product.price * item.quantity,
+    0
+  );
 
   const cartDiscountTotal = cart.reduce((sum, item) => {
     if (item.product.oldPrice && item.product.oldPrice > item.product.price) {
@@ -247,47 +406,55 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     return sum;
   }, 0);
 
-  const deliveryFee =
-    cartSubtotal === 0
-      ? 0
-      : cartSubtotal >= BRAND_INFO.freeDeliveryThreshold
-      ? 0
-      : BRAND_INFO.standardDeliveryFee;
+  // NO delivery fee per client requirement
+  const grandTotal = cartSubtotal;
 
-  const grandTotal = cartSubtotal + deliveryFee;
+  const buildOrderWhatsAppUrl = useCallback((order: Order): string => {
+    const msg = buildWhatsAppOrderMessage(order);
+    return `${BRAND_INFO.whatsappUrl}?text=${encodeURIComponent(msg)}`;
+  }, []);
 
   const placeOrder = useCallback(
-    (
-      customer: OrderCustomerDetails,
-      paymentMethod: 'Cash on Delivery' | 'Bank Transfer / WhatsApp'
-    ): Order => {
-      const randomNum = Math.floor(100000 + Math.random() * 900000);
-      const orderNumber = `MGC-${randomNum}`;
-      const newOrder: Order = {
-        orderNumber,
-        createdAt: new Date().toISOString(),
-        customer,
+    async (
+      customer: OrderCustomerDetails
+    ): Promise<{ order: Order; whatsappUrl: string }> => {
+      // 1. Send order to backend /api/orders.php FIRST so it is saved in MySQL BEFORE WhatsApp opens
+      const response = await fetch('/api/orders.php', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({
+          customer,
+          items: cart,
+        }),
+      });
+
+      const data = await response.json();
+      if (!response.ok || !data.success || !data.order) {
+        throw new Error(data.error || 'Could not save order. Please check your details.');
+      }
+
+      const savedOrder: Order = {
+        ...data.order,
         items: [...cart],
-        subtotal: cartSubtotal,
-        delivery: deliveryFee,
-        discount: cartDiscountTotal,
-        total: grandTotal,
-        paymentMethod,
       };
 
-      setOrders((prev) => [newOrder, ...prev]);
-      setLastOrder(newOrder);
+      setOrders((prev) => [savedOrder, ...prev]);
+      setLastOrder(savedOrder);
       setSavedCustomer(customer);
       try {
         localStorage.setItem(STORAGE_KEYS.CUSTOMER, JSON.stringify(customer));
       } catch {
         // ignore
       }
+
+      const whatsappUrl = buildOrderWhatsAppUrl(savedOrder);
       clearCart();
-      showToast(`Order ${orderNumber} placed successfully!`, 'success');
-      return newOrder;
+      showToast(`Order ${savedOrder.orderNumber} saved! Redirecting to WhatsApp...`, 'success');
+
+      return { order: savedOrder, whatsappUrl };
     },
-    [cart, cartSubtotal, deliveryFee, cartDiscountTotal, grandTotal, clearCart, showToast]
+    [cart, clearCart, showToast, buildOrderWhatsAppUrl]
   );
 
   const saveContactMessage = useCallback(
@@ -310,6 +477,9 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   return (
     <StoreContext.Provider
       value={{
+        products,
+        categories,
+        refreshCatalog,
         cart,
         wishlist,
         recentlyViewed,
@@ -333,9 +503,9 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         cartCount,
         cartSubtotal,
         cartDiscountTotal,
-        deliveryFee,
         grandTotal,
         placeOrder,
+        buildOrderWhatsAppUrl,
         saveContactMessage,
       }}
     >
