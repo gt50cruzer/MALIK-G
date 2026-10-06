@@ -602,9 +602,12 @@ export const OWNER_ADMIN_EMAIL = 'malikg@gmail.com';
 export const INITIAL_OWNER_PASSWORD = 'malikgcollection';
 export const SESSION_TIMEOUT_MS = 24 * 60 * 60 * 1000; // 24 hours
 
+// Deterministic, stable HMAC secret across all Vercel serverless cold starts.
+// Reads process.env.MGC_AUTH_SECRET first; never generates a random secret at runtime.
 const TOKEN_SECRET =
-  process.env.AUTH_TOKEN_SECRET ||
-  process.env.SESSION_SECRET ||
+  (process.env.MGC_AUTH_SECRET && process.env.MGC_AUTH_SECRET.trim()) ||
+  (process.env.AUTH_TOKEN_SECRET && process.env.AUTH_TOKEN_SECRET.trim()) ||
+  (process.env.SESSION_SECRET && process.env.SESSION_SECRET.trim()) ||
   'malik-g-collection-production-token-secret-v1';
 
 // Resolve writable runtime directory (supports both AI Studio workspace and Vercel /tmp)
@@ -1068,6 +1071,18 @@ export function processAuthRequest(req: IncomingAuthRequest): ApiHandlerResult {
 
   const action = String(req.query?.action || '').trim();
   const body = (req.body || {}) as Record<string, unknown>;
+
+  if (method === 'GET' && action === 'health') {
+    return {
+      status: 200,
+      body: {
+        success: true,
+        service: 'auth',
+        runtime: 'vercel',
+      },
+    };
+  }
+
   const db = loadDatabase();
   if (!Array.isArray(db.customers)) {
     db.customers = [];

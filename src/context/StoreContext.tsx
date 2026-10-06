@@ -144,11 +144,29 @@ export function getAuthHeaders(extraHeaders?: Record<string, string>): Record<st
   return headers;
 }
 
-const CONFIGURED_API_BASE = String(
-  (import.meta as unknown as { env?: Record<string, string> }).env?.VITE_API_BASE_URL || ''
-)
-  .trim()
-  .replace(/\/+$/, '');
+function resolveConfiguredApiBase(): string {
+  const raw = String(
+    (import.meta as unknown as { env?: Record<string, string> }).env?.VITE_API_BASE_URL || ''
+  )
+    .trim()
+    .replace(/\/+$/, '');
+  if (!raw) return '';
+  const lower = raw.toLowerCase();
+  // Never allow localhost, 127.0.0.1, or AI Studio preview URLs to override production API calls
+  if (
+    lower.includes('localhost') ||
+    lower.includes('127.0.0.1') ||
+    lower.includes('.run.app')
+  ) {
+    return '';
+  }
+  if (typeof window !== 'undefined' && window.location.hostname.toLowerCase().endsWith('.vercel.app')) {
+    return '';
+  }
+  return raw;
+}
+
+const CONFIGURED_API_BASE = resolveConfiguredApiBase();
 
 export function buildApiUrl(
   resource: 'auth' | 'orders' | 'products' | 'categories' | 'dashboard' | 'upload',

@@ -140,6 +140,30 @@ function formatOrderDateTime(isoString: string): string {
   });
 }
 
+function sanitizeDiagnosticBody(rawBody: string): string {
+  if (!rawBody) return '(empty response body)';
+  // Redact any accidental token/password fields if present in raw text
+  const redacted = rawBody
+    .replace(/"(password|confirmPassword|sessionToken|customerVaultToken|csrfToken)"\s*:\s*"[^"]*"/gi, '"$1":"[REDACTED]"')
+    .trim();
+  return redacted.slice(0, 500);
+}
+
+function formatAuthDiagnosticError(
+  requestedUrl: string,
+  status: number | string,
+  contentType: string,
+  bodySnippet: string
+): string {
+  return [
+    'Authentication API failed',
+    `URL: ${requestedUrl}`,
+    `HTTP: ${status}`,
+    `Content-Type: ${contentType || 'none'}`,
+    `Message: ${sanitizeDiagnosticBody(bodySnippet)}`,
+  ].join('\n');
+}
+
 const DEFAULT_STATS: DashboardStats = {
   totalOrders: 0,
   pendingOrders: 0,
@@ -535,18 +559,25 @@ export const AdminPanel: React.FC = () => {
       return;
     }
 
+    const requestUrl = '/api/auth?action=login';
+    console.info('[MGC Auth] POST', requestUrl);
+
     setLoginLoading(true);
     try {
-      const res = await apiFetch('auth', 'action=login', {
+      const res = await fetch(requestUrl, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: getAuthHeaders({ 'Content-Type': 'application/json' }),
         credentials: 'include',
         body: JSON.stringify({
           email: trimmedEmail,
           password: loginPassword,
         }),
       });
-      const data = await safeJsonParse<{
+
+      const contentType = res.headers.get('content-type') || '';
+      const rawText = await res.text();
+
+      let data: {
         success?: boolean;
         authenticated?: boolean;
         customerAuthenticated?: boolean;
@@ -558,9 +589,34 @@ export const AdminPanel: React.FC = () => {
         csrfToken?: string;
         sessionToken?: string;
         customerVaultToken?: string;
-      }>(res);
+      } | null = null;
+
+      try {
+        data = rawText ? JSON.parse(rawText) : null;
+      } catch {
+        data = null;
+      }
+
+      if (!data || !contentType.toLowerCase().includes('application/json')) {
+        setLoginError(
+          formatAuthDiagnosticError(requestUrl, res.status, contentType, rawText)
+        );
+        return;
+      }
+
       if (!res.ok || (!data.authenticated && !data.customerAuthenticated)) {
-        setLoginError(data.message || data.error || 'Invalid email or password.');
+        if (res.status === 400 || res.status === 401) {
+          setLoginError(data.message || data.error || 'Invalid email or password.');
+        } else {
+          setLoginError(
+            formatAuthDiagnosticError(
+              requestUrl,
+              res.status,
+              contentType,
+              data.message || data.error || rawText
+            )
+          );
+        }
       } else if (data.authenticated && data.role === 'admin') {
         setCustomerSession(null, data.sessionToken || '');
         setAuthenticated(true);
@@ -592,8 +648,11 @@ export const AdminPanel: React.FC = () => {
         showToast('Signed in successfully.', 'success');
         navigate('/', { replace: true });
       }
-    } catch {
-      setLoginError('Unable to connect to authentication server.');
+    } catch (err) {
+      const errMsg = err instanceof Error ? err.message : String(err);
+      setLoginError(
+        formatAuthDiagnosticError(requestUrl, 'NETWORK_ERROR', 'none', errMsg)
+      );
     } finally {
       setLoginLoading(false);
     }
@@ -630,11 +689,14 @@ export const AdminPanel: React.FC = () => {
       return;
     }
 
+    const requestUrl = '/api/auth?action=register';
+    console.info('[MGC Auth] POST', requestUrl);
+
     setRegLoading(true);
     try {
-      const res = await apiFetch('auth', 'action=register', {
+      const res = await fetch(requestUrl, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: getAuthHeaders({ 'Content-Type': 'application/json' }),
         credentials: 'include',
         body: JSON.stringify({
           fullName: trimmedName,
@@ -643,7 +705,11 @@ export const AdminPanel: React.FC = () => {
           confirmPassword: regConfirmPassword,
         }),
       });
-      const data = await safeJsonParse<{
+
+      const contentType = res.headers.get('content-type') || '';
+      const rawText = await res.text();
+
+      let data: {
         success?: boolean;
         message?: string;
         error?: string;
@@ -652,10 +718,35 @@ export const AdminPanel: React.FC = () => {
         csrfToken?: string;
         sessionToken?: string;
         customerVaultToken?: string;
-      }>(res);
+      } | null = null;
+
+      try {
+        data = rawText ? JSON.parse(rawText) : null;
+      } catch {
+        data = null;
+      }
+
+      if (!data || !contentType.toLowerCase().includes('application/json')) {
+        setRegError(
+          formatAuthDiagnosticError(requestUrl, res.status, contentType, rawText)
+        );
+        return;
+      }
 
       if (!res.ok || !data.success) {
-        setRegError(data.message || data.error || 'Unable to create account.');
+        // Keep normal validation messages for 400 (validation) and 409 (duplicate email)
+        if (res.status === 400 || res.status === 409) {
+          setRegError(data.message || data.error || 'Unable to create account.');
+        } else {
+          setRegError(
+            formatAuthDiagnosticError(
+              requestUrl,
+              res.status,
+              contentType,
+              data.message || data.error || rawText
+            )
+          );
+        }
       } else {
         if (data.customerVaultToken) {
           addStoredCustomerVaultToken(data.customerVaultToken);
@@ -681,8 +772,11 @@ export const AdminPanel: React.FC = () => {
           navigate('/', { replace: true });
         }, 600);
       }
-    } catch {
-      setRegError('Unable to connect to authentication server.');
+    } catch (err) {
+      const errMsg = err instanceof Error ? err.message : String(err);
+      setRegError(
+        formatAuthDiagnosticError(requestUrl, 'NETWORK_ERROR', 'none', errMsg)
+      );
     } finally {
       setRegLoading(false);
     }
@@ -818,9 +912,9 @@ export const AdminPanel: React.FC = () => {
             </div>
 
             {regError && (
-              <div className="p-3.5 bg-red-500/10 border border-red-500/40 text-xs text-red-300 flex items-center gap-2">
-                <AlertCircle className="w-4 h-4 shrink-0" />
-                <span>{regError}</span>
+              <div className="p-3.5 bg-red-500/10 border border-red-500/40 text-xs text-red-300 flex items-start gap-2">
+                <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
+                <span className="whitespace-pre-wrap break-words">{regError}</span>
               </div>
             )}
 
@@ -949,9 +1043,9 @@ export const AdminPanel: React.FC = () => {
           </div>
 
           {loginError && (
-            <div className="p-3.5 bg-red-500/10 border border-red-500/40 text-xs text-red-300 flex items-center gap-2">
-              <AlertCircle className="w-4 h-4 shrink-0" />
-              <span>{loginError}</span>
+            <div className="p-3.5 bg-red-500/10 border border-red-500/40 text-xs text-red-300 flex items-start gap-2">
+              <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
+              <span className="whitespace-pre-wrap break-words">{loginError}</span>
             </div>
           )}
 

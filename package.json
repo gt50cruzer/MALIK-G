@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "tsx server.ts",
-    "build": "vite build",
+    "build": "vite build && node -e \"if(process.env.VERCEL){const fs=require('fs');['dist/api','dist/admin','dist/config','dist/.htaccess'].forEach(p=>fs.rmSync(p,{recursive:true,force:true}));}\"",
     "start": "NODE_ENV=production tsx server.ts",
     "preview": "vite preview",
     "clean": "rm -rf dist server.js",
