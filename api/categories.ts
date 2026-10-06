@@ -1,5 +1,5 @@
-import { IncomingMessage, ServerResponse } from 'http';
-import { processCategoriesRequest, IncomingAuthRequest } from './_backend';
+import type { IncomingMessage, ServerResponse } from 'http';
+import { processCategoriesRequest, type IncomingAuthRequest } from './_backend.js';
 
 type VercelRequest = IncomingMessage & {
   query?: Record<string, unknown>;
@@ -13,8 +13,19 @@ type VercelResponse = ServerResponse & {
 };
 
 async function parseJsonBody(req: VercelRequest): Promise<Record<string, unknown>> {
-  if (req.body && typeof req.body === 'object') {
+  const method = (req.method || 'GET').toUpperCase();
+  if (method === 'GET' || method === 'HEAD' || method === 'OPTIONS') {
+    return {};
+  }
+  if (req.body && typeof req.body === 'object' && !Buffer.isBuffer(req.body)) {
     return req.body as Record<string, unknown>;
+  }
+  if (Buffer.isBuffer(req.body)) {
+    try {
+      return JSON.parse(req.body.toString('utf-8')) as Record<string, unknown>;
+    } catch {
+      return {};
+    }
   }
   if (typeof req.body === 'string' && req.body.trim()) {
     try {
@@ -23,12 +34,17 @@ async function parseJsonBody(req: VercelRequest): Promise<Record<string, unknown
       return {};
     }
   }
+  if (req.readableEnded || req.complete) {
+    return {};
+  }
   return new Promise((resolve) => {
     let raw = '';
+    const timer = setTimeout(() => resolve({}), 3000);
     req.on('data', (chunk) => {
       raw += chunk;
     });
     req.on('end', () => {
+      clearTimeout(timer);
       if (!raw || !raw.trim()) {
         resolve({});
         return;
@@ -39,7 +55,10 @@ async function parseJsonBody(req: VercelRequest): Promise<Record<string, unknown
         resolve({});
       }
     });
-    req.on('error', () => resolve({}));
+    req.on('error', () => {
+      clearTimeout(timer);
+      resolve({});
+    });
   });
 }
 

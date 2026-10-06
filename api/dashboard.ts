@@ -1,5 +1,5 @@
-import { IncomingMessage, ServerResponse } from 'http';
-import { processDashboardRequest, IncomingAuthRequest } from './_backend';
+import type { IncomingMessage, ServerResponse } from 'http';
+import { processDashboardRequest, type IncomingAuthRequest } from './_backend.js';
 
 type VercelRequest = IncomingMessage & {
   query?: Record<string, unknown>;
