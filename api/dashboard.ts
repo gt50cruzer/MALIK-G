@@ -12,28 +12,50 @@ type VercelResponse = ServerResponse & {
   json?: (data: unknown) => void;
 };
 
-export default async function handler(req: VercelRequest, res: VercelResponse) {
-  const authReq: IncomingAuthRequest = {
-    method: req.method,
-    query: req.query || {},
-    body: {},
-    headers: req.headers,
-  };
-
-  const result = processDashboardRequest(authReq);
-
-  res.setHeader('Content-Type', 'application/json; charset=utf-8');
-  if (result.headers) {
-    for (const [k, v] of Object.entries(result.headers)) {
-      res.setHeader(k, v);
-    }
+function parseQuery(req: VercelRequest): Record<string, unknown> {
+  if (req.query && typeof req.query === 'object' && Object.keys(req.query).length > 0) {
+    return req.query;
   }
+  const urlStr = req.url || '';
+  const qIndex = urlStr.indexOf('?');
+  if (qIndex === -1) return {};
+  const params = new URLSearchParams(urlStr.slice(qIndex + 1));
+  const out: Record<string, unknown> = {};
+  params.forEach((value, key) => {
+    out[key] = value;
+  });
+  return out;
+}
 
-  if (typeof res.status === 'function' && typeof res.json === 'function') {
-    res.status(result.status).json(result.body);
+export default async function handler(req: VercelRequest, res: VercelResponse) {
+  res.setHeader('Content-Type', 'application/json; charset=utf-8');
+  if ((req.method || '').toUpperCase() === 'OPTIONS') {
+    res.statusCode = 200;
+    res.end(JSON.stringify({ success: true }));
     return;
   }
 
-  res.statusCode = result.status;
-  res.end(JSON.stringify(result.body));
+  try {
+    const authReq: IncomingAuthRequest = {
+      method: req.method,
+      query: parseQuery(req),
+      body: {},
+      headers: req.headers,
+    };
+
+    const result = processDashboardRequest(authReq);
+
+    if (result.headers) {
+      for (const [k, v] of Object.entries(result.headers)) {
+        res.setHeader(k, v);
+      }
+    }
+
+    res.statusCode = result.status;
+    res.end(JSON.stringify(result.body));
+  } catch (err) {
+    const message = err instanceof Error ? err.message : 'Internal server error.';
+    res.statusCode = 500;
+    res.end(JSON.stringify({ success: false, message, error: message }));
+  }
 }

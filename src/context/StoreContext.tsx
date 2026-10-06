@@ -83,6 +83,7 @@ const STORAGE_KEYS = {
   CUSTOMER: 'malik_g_customer_v2',
   MESSAGES: 'malik_g_contact_messages_v2',
   SESSION_TOKEN: 'malik_g_session_token_v2',
+  CUSTOMER_VAULT: 'malik_g_customer_vault_v1',
 };
 
 export function getStoredSessionToken(): string {
@@ -105,12 +106,40 @@ export function setStoredSessionToken(token: string): void {
   }
 }
 
+export function getStoredCustomerVaultTokens(): string[] {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEYS.CUSTOMER_VAULT);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed.filter((t): t is string => typeof t === 'string' && Boolean(t)) : [];
+  } catch {
+    return [];
+  }
+}
+
+export function addStoredCustomerVaultToken(token?: string): void {
+  if (!token || typeof token !== 'string' || !token.startsWith('mgcv.')) return;
+  try {
+    const current = getStoredCustomerVaultTokens();
+    if (!current.includes(token)) {
+      const updated = [...current.slice(-19), token];
+      localStorage.setItem(STORAGE_KEYS.CUSTOMER_VAULT, JSON.stringify(updated));
+    }
+  } catch {
+    // ignore storage errors
+  }
+}
+
 export function getAuthHeaders(extraHeaders?: Record<string, string>): Record<string, string> {
   const headers: Record<string, string> = { ...(extraHeaders || {}) };
   const token = getStoredSessionToken();
   if (token) {
     headers['Authorization'] = `Bearer ${token}`;
     headers['X-Session-Token'] = token;
+  }
+  const vaultTokens = getStoredCustomerVaultTokens();
+  if (vaultTokens.length > 0) {
+    headers['X-Customer-Vault'] = vaultTokens.join(',');
   }
   return headers;
 }
@@ -140,26 +169,56 @@ function isPhpSourceOrHtmlFallback(rawText: string): boolean {
   );
 }
 
+function isVercelHostname(): boolean {
+  if (typeof window === 'undefined') return false;
+  return window.location.hostname.toLowerCase().endsWith('.vercel.app');
+}
+
 /**
  * Production-safe API fetch wrapper:
- * 1. Calls `/api/<resource>` (handled natively by both Vercel Serverless Functions and AI Studio Express server.ts).
- * 2. If deployed on a PHP-only shared host where extensionless `/api/<resource>` returns 404 or HTML,
- *    automatically retries `/api/<resource>.php`.
+ * 1. Always calls `/api/<resource>` (e.g., `/api/auth?action=register`) on Vercel and AI Studio.
+ * 2. Automatically attaches session & signed customer vault headers so serverless cold starts preserve accounts.
+ * 3. Only retries `/api/<resource>.php` when NOT running on `.vercel.app` and the host is a legacy PHP server.
  */
 export async function apiFetch(
   resource: 'auth' | 'orders' | 'products' | 'categories' | 'dashboard' | 'upload',
   query?: string,
   init?: RequestInit
 ): Promise<Response> {
+  const mergedHeaders: Record<string, string> = getAuthHeaders();
+  if (init?.headers) {
+    if (init.headers instanceof Headers) {
+      init.headers.forEach((v, k) => {
+        mergedHeaders[k] = v;
+      });
+    } else if (Array.isArray(init.headers)) {
+      for (const [k, v] of init.headers) {
+        mergedHeaders[k] = v;
+      }
+    } else {
+      Object.assign(mergedHeaders, init.headers as Record<string, string>);
+    }
+  }
+
+  const finalInit: RequestInit = {
+    ...init,
+    headers: mergedHeaders,
+  };
+
   const primaryUrl = buildApiUrl(resource, query, false);
-  const res = await fetch(primaryUrl, init);
+  const res = await fetch(primaryUrl, finalInit);
+
+  // Never request /api/*.php on Vercel deployments
+  if (isVercelHostname()) {
+    return res;
+  }
 
   const contentType = (res.headers.get('content-type') || '').toLowerCase();
   if (res.status === 404 || contentType.includes('text/html')) {
     const cloneText = await res.clone().text();
     if (res.status === 404 || isPhpSourceOrHtmlFallback(cloneText)) {
       const phpFallbackUrl = buildApiUrl(resource, query, true);
-      const phpRes = await fetch(phpFallbackUrl, init);
+      const phpRes = await fetch(phpFallbackUrl, finalInit);
       const phpCloneText = await phpRes.clone().text();
       if (!isPhpSourceOrHtmlFallback(phpCloneText)) {
         return phpRes;

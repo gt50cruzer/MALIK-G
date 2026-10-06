@@ -27,6 +27,7 @@ import {
   safeJsonParse,
   getAuthHeaders,
   setStoredSessionToken,
+  addStoredCustomerVaultToken,
   apiFetch,
 } from '../context/StoreContext';
 
@@ -556,6 +557,7 @@ export const AdminPanel: React.FC = () => {
         user?: { id?: number; fullName?: string; email?: string; role?: string };
         csrfToken?: string;
         sessionToken?: string;
+        customerVaultToken?: string;
       }>(res);
       if (!res.ok || (!data.authenticated && !data.customerAuthenticated)) {
         setLoginError(data.message || data.error || 'Invalid email or password.');
@@ -569,6 +571,9 @@ export const AdminPanel: React.FC = () => {
         navigate('/admin/', { replace: true });
       } else {
         // Customer login -> set customer session state immediately & return customer to storefront, never /admin/
+        if (data.customerVaultToken) {
+          addStoredCustomerVaultToken(data.customerVaultToken);
+        }
         setAuthenticated(false);
         setCustomerAuthenticated(true);
         setLoginPassword('');
@@ -646,11 +651,15 @@ export const AdminPanel: React.FC = () => {
         user?: { id?: number; fullName?: string; email?: string; role?: string };
         csrfToken?: string;
         sessionToken?: string;
+        customerVaultToken?: string;
       }>(res);
 
       if (!res.ok || !data.success) {
         setRegError(data.message || data.error || 'Unable to create account.');
       } else {
+        if (data.customerVaultToken) {
+          addStoredCustomerVaultToken(data.customerVaultToken);
+        }
         setRegSuccess('Account created successfully.');
         setCustomerAuthenticated(Boolean(data.customerAuthenticated));
         setRegPassword('');

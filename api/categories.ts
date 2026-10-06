@@ -59,30 +59,37 @@ function parseQuery(req: VercelRequest): Record<string, unknown> {
 }
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
-  const body = await parseJsonBody(req);
-  const query = parseQuery(req);
-
-  const authReq: IncomingAuthRequest = {
-    method: req.method,
-    query,
-    body,
-    headers: req.headers,
-  };
-
-  const result = processCategoriesRequest(authReq);
-
   res.setHeader('Content-Type', 'application/json; charset=utf-8');
-  if (result.headers) {
-    for (const [k, v] of Object.entries(result.headers)) {
-      res.setHeader(k, v);
-    }
-  }
-
-  if (typeof res.status === 'function' && typeof res.json === 'function') {
-    res.status(result.status).json(result.body);
+  if ((req.method || '').toUpperCase() === 'OPTIONS') {
+    res.statusCode = 200;
+    res.end(JSON.stringify({ success: true }));
     return;
   }
 
-  res.statusCode = result.status;
-  res.end(JSON.stringify(result.body));
+  try {
+    const body = await parseJsonBody(req);
+    const query = parseQuery(req);
+
+    const authReq: IncomingAuthRequest = {
+      method: req.method,
+      query,
+      body,
+      headers: req.headers,
+    };
+
+    const result = processCategoriesRequest(authReq);
+
+    if (result.headers) {
+      for (const [k, v] of Object.entries(result.headers)) {
+        res.setHeader(k, v);
+      }
+    }
+
+    res.statusCode = result.status;
+    res.end(JSON.stringify(result.body));
+  } catch (err) {
+    const message = err instanceof Error ? err.message : 'Internal server error.';
+    res.statusCode = 500;
+    res.end(JSON.stringify({ success: false, message, error: message }));
+  }
 }

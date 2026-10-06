@@ -1,8 +1,557 @@
 import crypto from 'crypto';
 import fs from 'fs';
 import path from 'path';
-import { INITIAL_PRODUCTS } from '../src/data/products';
-import { Product, Order, OrderStatusType, OrderItemSnapshot } from '../src/types';
+
+export type Category =
+  | 'Shirts'
+  | 'Pants'
+  | 'Shoes'
+  | 'Watches'
+  | 'Perfumes'
+  | 'Accessories'
+  | string;
+
+export interface ProductColor {
+  name: string;
+  hex: string;
+}
+
+export interface Product {
+  id: string;
+  dbId?: number;
+  sku: string;
+  name: string;
+  shortDescription: string;
+  description: string;
+  price: number;
+  oldPrice?: number;
+  originalPrice?: number;
+  offerPrice?: number | null;
+  discountPercent?: number;
+  category: Category;
+  image: string;
+  gallery: string[];
+  rating: number;
+  reviewsCount: number;
+  isNewArrival?: boolean;
+  isTrending?: boolean;
+  inStock: boolean;
+  published?: boolean;
+  sizes?: string[];
+  colors?: ProductColor[];
+  fabricOrMaterial: string;
+  careOrNotes?: string;
+  tags: string[];
+  createdAt?: string;
+}
+
+export interface CartItemType {
+  product: Product;
+  quantity: number;
+  selectedSize?: string;
+  selectedColor?: string;
+}
+
+export interface OrderCustomerDetails {
+  fullName: string;
+  phone: string;
+  email: string;
+  city: string;
+  address: string;
+  notes?: string;
+}
+
+export type OrderStatusType =
+  | 'Pending'
+  | 'Confirmed'
+  | 'Processing'
+  | 'Shipped'
+  | 'Delivered'
+  | 'Cancelled';
+
+export interface OrderItemSnapshot {
+  id?: number;
+  orderId?: number;
+  productId: string;
+  productNameSnapshot: string;
+  productImageSnapshot: string;
+  selectedColor: string;
+  selectedSize: string;
+  quantity: number;
+  unitPrice: number;
+  originalPriceSnapshot?: number;
+  subtotal: number;
+}
+
+export interface Order {
+  id?: number;
+  orderNumber: string;
+  createdAt: string;
+  updatedAt?: string;
+  customer: OrderCustomerDetails;
+  items: CartItemType[];
+  orderItems?: OrderItemSnapshot[];
+  subtotal: number;
+  discount: number;
+  total: number;
+  status: OrderStatusType;
+  paymentMethod?: string;
+}
+
+const UPLOADS = {
+  SHIRTS: '/uploads/category_shirts.jpg',
+  PANTS: '/uploads/category_pants.jpg',
+  SHOES: '/uploads/category_shoes.jpg',
+  WATCHES: '/uploads/category_watches.jpg',
+  PERFUMES: '/uploads/category_perfumes.jpg',
+};
+
+const RAW_SEED_PRODUCTS: Product[] = [
+  {
+    id: 'mg-shirt-01',
+    sku: 'MGC-SH-101',
+    name: 'Sialkot Reserve Oxford Button-Down',
+    shortDescription: 'Tailored combed cotton Oxford shirt with mother-of-pearl buttons.',
+    description:
+      'Crafted for refined daily wear and formal gatherings across Pakistan. Constructed from breathable 100% two-ply combed cotton with a structured collar that holds its shape under a blazer or worn solo.',
+    price: 4450,
+    oldPrice: 5200,
+    category: 'Shirts',
+    image: UPLOADS.SHIRTS,
+    gallery: [UPLOADS.SHIRTS],
+    rating: 4.9,
+    reviewsCount: 64,
+    isNewArrival: true,
+    isTrending: true,
+    inStock: true,
+    sizes: ['S', 'M', 'L', 'XL', 'XXL'],
+    colors: [
+      { name: 'Crisp Ivory', hex: '#F5F5F0' },
+      { name: 'Midnight Navy', hex: '#1B2436' },
+      { name: 'Charcoal Slate', hex: '#2D2E32' },
+    ],
+    fabricOrMaterial: '100% Two-Ply Combed Egyptian Cotton',
+    careOrNotes: 'Machine wash cold, gentle cycle. Warm iron on reverse.',
+    tags: ['oxford', 'formal shirt', 'cotton', 'white shirt', 'men'],
+  },
+  {
+    id: 'mg-shirt-02',
+    sku: 'MGC-SH-102',
+    name: 'Noir Mandarin Collar Linen Shirt',
+    shortDescription: 'Lightweight pure linen-cotton blend with a sharp band collar.',
+    description:
+      'Designed for warm Pakistani evenings and smart-casual occasions. Features a clean mandarin band collar, reinforced cuffs, and a relaxed yet tailored silhouette.',
+    price: 3950,
+    category: 'Shirts',
+    image: UPLOADS.SHIRTS,
+    gallery: [UPLOADS.SHIRTS],
+    rating: 4.8,
+    reviewsCount: 41,
+    isTrending: true,
+    inStock: true,
+    sizes: ['S', 'M', 'L', 'XL'],
+    colors: [
+      { name: 'Obsidian Black', hex: '#111113' },
+      { name: 'Olive Sand', hex: '#6E6A53' },
+      { name: 'Warm Stone', hex: '#D8CFC2' },
+    ],
+    fabricOrMaterial: '65% European Linen, 35% Combed Cotton',
+    careOrNotes: 'Hand wash or dry clean recommended.',
+    tags: ['linen', 'mandarin collar', 'black shirt', 'summer', 'casual'],
+  },
+  {
+    id: 'mg-shirt-03',
+    sku: 'MGC-SH-103',
+    name: 'Executive Twill French-Cuff Dress Shirt',
+    shortDescription: 'Fine diagonal twill weave engineered for boardroom authority.',
+    description:
+      'Our signature formal dress shirt featuring a wrinkle-resistant luxury twill finish, semi-spread collar, and convertible cuffs suitable for gold cufflinks or standard buttoning.',
+    price: 4800,
+    oldPrice: 5600,
+    category: 'Shirts',
+    image: UPLOADS.SHIRTS,
+    gallery: [UPLOADS.SHIRTS],
+    rating: 4.9,
+    reviewsCount: 38,
+    isNewArrival: true,
+    inStock: true,
+    sizes: ['M', 'L', 'XL', 'XXL'],
+    colors: [
+      { name: 'Sky Ice', hex: '#D6E4F0' },
+      { name: 'Pure White', hex: '#FFFFFF' },
+    ],
+    fabricOrMaterial: '120s Two-Fold Non-Iron Luxury Cotton Twill',
+    careOrNotes: 'Hang dry immediately after wash for crease-free finish.',
+    tags: ['dress shirt', 'formal', 'office', 'twill'],
+  },
+  {
+    id: 'mg-shirt-04',
+    sku: 'MGC-SH-104',
+    name: 'Artisan Check Brushed Flannel Overshirt',
+    shortDescription: 'Mid-weight brushed cotton overshirt for layered winter styling.',
+    description:
+      'Versatile transitional overshirt with chest utility pockets, horn-style buttons, and a soft brushed interior ideal for Sialkot and northern winter evenings.',
+    price: 4650,
+    category: 'Shirts',
+    image: UPLOADS.SHIRTS,
+    gallery: [UPLOADS.SHIRTS],
+    rating: 4.7,
+    reviewsCount: 29,
+    inStock: true,
+    sizes: ['M', 'L', 'XL'],
+    colors: [
+      { name: 'Espresso Check', hex: '#3B2F2F' },
+      { name: 'Forest Charcoal', hex: '#233127' },
+    ],
+    fabricOrMaterial: '100% Brushed Heavyweight Cotton Flannel (240 GSM)',
+    careOrNotes: 'Wash with similar dark colors.',
+    tags: ['overshirt', 'flannel', 'check', 'winter'],
+  },
+  {
+    id: 'mg-pant-01',
+    sku: 'MGC-PT-201',
+    name: 'Savile Tailored Stretch Chino Trousers',
+    shortDescription: 'Tapered smart chinos with 4-way comfort stretch and clean crease.',
+    description:
+      'Engineered for all-day movement without losing its crisp tailored drape. Features Italian-style side pockets, reinforced belt loops, and a modern tapered ankle.',
+    price: 4250,
+    oldPrice: 4950,
+    category: 'Pants',
+    image: UPLOADS.PANTS,
+    gallery: [UPLOADS.PANTS],
+    rating: 4.9,
+    reviewsCount: 77,
+    isTrending: true,
+    inStock: true,
+    sizes: ['30', '32', '34', '36', '38'],
+    colors: [
+      { name: 'Sandstone Khaki', hex: '#C3B091' },
+      { name: 'Jet Black', hex: '#121214' },
+      { name: 'Deep Navy', hex: '#1A2433' },
+    ],
+    fabricOrMaterial: '97% Organic Peached Cotton, 3% Elastane',
+    careOrNotes: 'Turn inside out before washing.',
+    tags: ['chinos', 'trousers', 'formal pants', 'khaki'],
+  },
+  {
+    id: 'mg-pant-02',
+    sku: 'MGC-PT-202',
+    name: 'Selvedge-Inspired Raw Charcoal Denim',
+    shortDescription: 'Structured slim-straight denim with subtle tonal stitching.',
+    description:
+      'A refined dark denim jean crafted from heavyweight ring-spun cotton with just enough stretch for immediate comfort. Pair with Chelsea boots or minimalist sneakers.',
+    price: 4750,
+    category: 'Pants',
+    image: UPLOADS.PANTS,
+    gallery: [UPLOADS.PANTS],
+    rating: 4.8,
+    reviewsCount: 52,
+    isNewArrival: true,
+    inStock: true,
+    sizes: ['30', '32', '34', '36', '38'],
+    colors: [
+      { name: 'Charcoal Indigo', hex: '#1F242D' },
+      { name: 'Vintage Wash Black', hex: '#222225' },
+    ],
+    fabricOrMaterial: '13.5 oz Ring-Spun Comfort Stretch Denim',
+    careOrNotes: 'Wash cold sparingly to preserve deep dye character.',
+    tags: ['jeans', 'denim', 'black jeans', 'pants'],
+  },
+  {
+    id: 'mg-pant-03',
+    sku: 'MGC-PT-203',
+    name: 'Pleated Gurkha Sartorial Dress Trousers',
+    shortDescription: 'High-waisted double-pleated trousers with signature extended waistband.',
+    description:
+      'Statement sartorial tailoring featuring an adjustable buckle Gurkha waistband that eliminates the need for a belt. Drapes effortlessly over formal loafers.',
+    price: 5600,
+    oldPrice: 6500,
+    category: 'Pants',
+    image: UPLOADS.PANTS,
+    gallery: [UPLOADS.PANTS],
+    rating: 4.9,
+    reviewsCount: 34,
+    isNewArrival: true,
+    inStock: true,
+    sizes: ['30', '32', '34', '36'],
+    colors: [
+      { name: 'Warm Taupe', hex: '#8B7D6B' },
+      { name: 'Anthracite Grey', hex: '#333538' },
+    ],
+    fabricOrMaterial: 'Tropical Weight Wool-Blend Suiting Fabric',
+    careOrNotes: 'Dry clean only to maintain sharp front pleats.',
+    tags: ['gurkha', 'dress pants', 'tailored', 'luxury'],
+  },
+  {
+    id: 'mg-shoe-01',
+    sku: 'MGC-SHOE-301',
+    name: 'Sialkot Hand-Burnished Calfskin Penny Loafer',
+    shortDescription: 'Full-grain Pakistani leather loafers with Blake-stitched sole.',
+    description:
+      'Proudly handcrafted by master leather artisans in Sialkot. Cut from supple full-grain calfskin with a hand-burnished patina, breathable leather lining, and cushioned heel pad.',
+    price: 8950,
+    oldPrice: 10500,
+    category: 'Shoes',
+    image: UPLOADS.SHOES,
+    gallery: [UPLOADS.SHOES],
+    rating: 5.0,
+    reviewsCount: 89,
+    isNewArrival: true,
+    isTrending: true,
+    inStock: true,
+    sizes: ['40', '41', '42', '43', '44', '45'],
+    colors: [
+      { name: 'Cognac Tan', hex: '#8A4B29' },
+      { name: 'Obsidian Black', hex: '#111113' },
+      { name: 'Oxblood Bordeaux', hex: '#4A191E' },
+    ],
+    fabricOrMaterial: '100% Full-Grain Sialkot Export-Grade Calfskin Leather',
+    careOrNotes: 'Condition with neutral wax polish and use cedar shoe trees.',
+    tags: ['loafers', 'leather shoes', 'formal shoes', 'sialkot leather'],
+  },
+  {
+    id: 'mg-shoe-02',
+    sku: 'MGC-SHOE-302',
+    name: 'Monolith Minimalist Nappa Leather Sneaker',
+    shortDescription: 'Low-profile luxury court sneaker with tonal cupsole.',
+    description:
+      'Clean architectural lines meet plush everyday comfort. Built from buttery smooth Nappa leather with gold-foil heel branding and high-density memory foam insoles.',
+    price: 7450,
+    category: 'Shoes',
+    image: UPLOADS.SHOES,
+    gallery: [UPLOADS.SHOES],
+    rating: 4.8,
+    reviewsCount: 46,
+    isTrending: true,
+    inStock: true,
+    sizes: ['40', '41', '42', '43', '44'],
+    colors: [
+      { name: 'Triple Onyx & Gold', hex: '#141416' },
+      { name: 'Chalk White', hex: '#F4F4F0' },
+    ],
+    fabricOrMaterial: 'Full-Grain Nappa Upper & Vulcanized Rubber Cupsole',
+    careOrNotes: 'Wipe clean with damp microfiber cloth.',
+    tags: ['sneakers', 'casual shoes', 'leather sneakers'],
+  },
+  {
+    id: 'mg-shoe-03',
+    sku: 'MGC-SHOE-303',
+    name: 'Imperial Double Monk Strap Dress Shoe',
+    shortDescription: 'Cap-toe leather dress shoe with brushed antique brass buckles.',
+    description:
+      'Commanding formal footwear for weddings, executive meetings, and black-tie events. Features a chiselled toe box and anti-slip rubber-injected leather outsole.',
+    price: 9600,
+    oldPrice: 11200,
+    category: 'Shoes',
+    image: UPLOADS.SHOES,
+    gallery: [UPLOADS.SHOES],
+    rating: 4.9,
+    reviewsCount: 61,
+    inStock: true,
+    sizes: ['40', '41', '42', '43', '44', '45'],
+    colors: [
+      { name: 'Dark Espresso', hex: '#2E1E18' },
+      { name: 'Formal Black', hex: '#0E0E10' },
+    ],
+    fabricOrMaterial: 'Hand-Selected Box Calf Leather & Leather/TPR Outsole',
+    careOrNotes: 'Buff with horsehair brush before each wear.',
+    tags: ['monk strap', 'wedding shoes', 'formal', 'leather'],
+  },
+  {
+    id: 'mg-watch-01',
+    sku: 'MGC-WT-401',
+    name: 'Chronographe Royal Gold & Onyx Timepiece',
+    shortDescription: 'Sapphire-coated chronograph with brushed 316L stainless steel case.',
+    description:
+      'A bold horological statement combining a sunray obsidian dial, luminous gold baton indices, working chronograph sub-dials, and a solid deployment clasp bracelet.',
+    price: 12500,
+    oldPrice: 14800,
+    category: 'Watches',
+    image: UPLOADS.WATCHES,
+    gallery: [UPLOADS.WATCHES],
+    rating: 4.9,
+    reviewsCount: 112,
+    isNewArrival: true,
+    isTrending: true,
+    inStock: true,
+    sizes: ['42mm Standard'],
+    colors: [
+      { name: 'Gold & Obsidian', hex: '#D4AF37' },
+      { name: 'Gunmetal & Navy', hex: '#2A3446' },
+    ],
+    fabricOrMaterial: '316L Surgical Stainless Steel, Japanese Quartz Chronograph Movement, 5ATM',
+    careOrNotes: 'Includes Malik G presentation box and 1-year movement warranty.',
+    tags: ['watch', 'chronograph', 'gold watch', 'luxury watch', 'gift'],
+  },
+  {
+    id: 'mg-watch-02',
+    sku: 'MGC-WT-402',
+    name: 'Heritage Automatic Open-Heart Leather Watch',
+    shortDescription: 'Mechanical exhibition dial paired with crocodile-embossed leather strap.',
+    description:
+      'Powered by the motion of your wrist. The open-heart aperture reveals the beating balance wheel against a textured guilloché dial, finished with a genuine Sialkot leather strap.',
+    price: 14900,
+    oldPrice: 17500,
+    category: 'Watches',
+    image: UPLOADS.WATCHES,
+    gallery: [UPLOADS.WATCHES],
+    rating: 5.0,
+    reviewsCount: 58,
+    isNewArrival: true,
+    inStock: true,
+    sizes: ['40mm Dress'],
+    colors: [
+      { name: 'Rose Gold & Brown Leather', hex: '#B76E59' },
+      { name: 'Silver & Black Leather', hex: '#C0C0C5' },
+    ],
+    fabricOrMaterial: '21-Jewel Automatic Self-Winding Movement, Domed Mineral Crystal',
+    careOrNotes: 'Avoid strong magnetic fields; wind crown 15 turns if unworn for 40+ hours.',
+    tags: ['automatic watch', 'leather strap', 'mechanical', 'watch'],
+  },
+  {
+    id: 'mg-watch-03',
+    sku: 'MGC-WT-403',
+    name: 'Stealth Matte-Black Milanese Mesh Watch',
+    shortDescription: 'Ultra-thin 7mm minimalist case with magnetic woven steel mesh band.',
+    description:
+      'Sleek, weightless, and effortlessly modern. Slides smoothly under French cuffs while commanding attention with its murdered-out matte black PVD coating and gold hands.',
+    price: 8400,
+    category: 'Watches',
+    image: UPLOADS.WATCHES,
+    gallery: [UPLOADS.WATCHES],
+    rating: 4.8,
+    reviewsCount: 44,
+    inStock: true,
+    sizes: ['40mm Ultra-Slim'],
+    colors: [{ name: 'Matte Black & Gold', hex: '#151517' }],
+    fabricOrMaterial: 'Ion-Plated Matte Steel Case, Adjustable Milanese Mesh',
+    careOrNotes: '3ATM splash resistant.',
+    tags: ['minimalist watch', 'black watch', 'mesh strap'],
+  },
+  {
+    id: 'mg-perf-01',
+    sku: 'MGC-PF-501',
+    name: 'Oud Al Malik — Extrait de Parfum (100ml)',
+    shortDescription: 'Opulent Cambodian oud, saffron, smoked amber, and Damascus rose.',
+    description:
+      'Our crown-jewel signature fragrance. Formulated at 28% pure perfume oil concentration for 12+ hour projection. Opens with spicy royal saffron and bergamot before settling into deep resinous agarwood and warm Madagascar vanilla.',
+    price: 6850,
+    oldPrice: 7900,
+    category: 'Perfumes',
+    image: UPLOADS.PERFUMES,
+    gallery: [UPLOADS.PERFUMES],
+    rating: 5.0,
+    reviewsCount: 134,
+    isNewArrival: true,
+    isTrending: true,
+    inStock: true,
+    sizes: ['100ml Extrait', '50ml Travel'],
+    colors: [{ name: 'Royal Gold Flacon', hex: '#D4AF37' }],
+    fabricOrMaterial: 'Notes: Royal Saffron, Bergamot, Cambodian Oud, Smoked Amber, Leather',
+    careOrNotes: 'Apply to pulse points (wrists, neck) without rubbing. Store in a cool dark place.',
+    tags: ['oud', 'perfume', 'fragrance', 'long lasting', 'extrait'],
+  },
+  {
+    id: 'mg-perf-02',
+    sku: 'MGC-PF-502',
+    name: 'Velours Noir — Bergamot & Vetiver Eau de Parfum',
+    shortDescription: 'Crisp Calabrian bergamot, black pepper, smoky vetiver, and ambroxan.',
+    description:
+      'Fresh, magnetic, and universally compliment-getting. Ideal for daytime office wear and warm Pakistani summers with a clean woody-citrus trail that lingers on fabric for days.',
+    price: 5450,
+    category: 'Perfumes',
+    image: UPLOADS.PERFUMES,
+    gallery: [UPLOADS.PERFUMES],
+    rating: 4.9,
+    reviewsCount: 83,
+    isTrending: true,
+    inStock: true,
+    sizes: ['100ml EDP'],
+    colors: [{ name: 'Smoked Glass Flacon', hex: '#232428' }],
+    fabricOrMaterial: 'Notes: Calabrian Bergamot, Pink Pepper, Haitian Vetiver, Cedarwood, Ambroxan',
+    careOrNotes: '22% Eau de Parfum concentration.',
+    tags: ['fresh perfume', 'citrus', 'office scent', 'men perfume'],
+  },
+  {
+    id: 'mg-perf-03',
+    sku: 'MGC-PF-503',
+    name: 'Sultan’s Amber & Tobacco Reserve (100ml)',
+    shortDescription: 'Warm honeyed tobacco leaf, cardamom, tonka bean, and dark cocoa.',
+    description:
+      'A rich winter and evening elixir inspired by classic private-blend perfumery. Envelops the wearer in a sophisticated aura of roasted spices, sweet pipe tobacco, and creamy sandalwood.',
+    price: 6200,
+    oldPrice: 7200,
+    category: 'Perfumes',
+    image: UPLOADS.PERFUMES,
+    gallery: [UPLOADS.PERFUMES],
+    rating: 4.9,
+    reviewsCount: 49,
+    inStock: true,
+    sizes: ['100ml EDP'],
+    colors: [{ name: 'Amber Gold Flacon', hex: '#9A6324' }],
+    fabricOrMaterial: 'Notes: Guatemalan Cardamom, Tobacco Leaf, Tonka Bean, Sandalwood',
+    careOrNotes: 'Best suited for evening events and cooler weather.',
+    tags: ['amber', 'tobacco', 'winter perfume', 'evening'],
+  },
+  {
+    id: 'mg-acc-01',
+    sku: 'MGC-AC-601',
+    name: 'Sialkot Full-Grain Reversible Executive Belt',
+    shortDescription: 'Black-to-cognac reversible leather strap with rotating gold/gunmetal buckle.',
+    description:
+      'Two essential formal belts in one. Crafted from vegetable-tanned Sialkot full-grain cowhide with a precision twist-buckle mechanism.',
+    price: 2950,
+    oldPrice: 3500,
+    category: 'Accessories',
+    image: UPLOADS.SHOES,
+    gallery: [UPLOADS.SHOES],
+    rating: 4.8,
+    reviewsCount: 37,
+    isNewArrival: true,
+    inStock: true,
+    sizes: ['32-34', '36-38', '40-42'],
+    colors: [{ name: 'Reversible Black / Cognac', hex: '#1C1613' }],
+    fabricOrMaterial: '100% Full-Grain Vegetable-Tanned Cowhide Leather',
+    careOrNotes: 'Pull and twist buckle head to switch between black and cognac sides.',
+    tags: ['belt', 'leather belt', 'accessories', 'gift'],
+  },
+  {
+    id: 'mg-acc-02',
+    sku: 'MGC-AC-602',
+    name: 'RFID Bifold Saddle-Stitched Leather Wallet',
+    shortDescription: 'Slim profile full-grain wallet with 8 card slots and cash divider.',
+    description:
+      'Hand-stitched in Sialkot with waxed linen thread and burnished edges. Built-in RFID shielding protects contactless bank cards while developing a rich patina over time.',
+    price: 2650,
+    category: 'Accessories',
+    image: UPLOADS.WATCHES,
+    gallery: [UPLOADS.WATCHES],
+    rating: 4.9,
+    reviewsCount: 65,
+    inStock: true,
+    sizes: ['One Size'],
+    colors: [
+      { name: 'Bourbon Brown', hex: '#5C3A21' },
+      { name: 'Jet Black', hex: '#121214' },
+    ],
+    fabricOrMaterial: 'Full-Grain Pull-Up Leather with RFID Blocking Lining',
+    careOrNotes: 'Delivered in a stamped Malik G gift box.',
+    tags: ['wallet', 'leather wallet', 'accessories', 'sialkot'],
+  },
+];
+
+export const INITIAL_PRODUCTS: Product[] = RAW_SEED_PRODUCTS.map((product) => {
+  const originalPrice = product.price;
+  const offerPrice = Math.round(originalPrice * 0.8);
+  return {
+    ...product,
+    price: offerPrice,
+    oldPrice: originalPrice,
+    originalPrice,
+    offerPrice,
+    discountPercent: 20,
+  };
+});
 
 export interface AdminAccount {
   id: number;
@@ -160,6 +709,63 @@ export function verifySignedSessionToken(token: string): SessionData | null {
       role: parsed.r,
       csrfToken: String(parsed.c || ''),
       lastActivity: Date.now(),
+    };
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Creates a server-signed, tamper-proof customer credential record so that even if a
+ * Vercel serverless cold start clears /tmp between registration and a later sign-in,
+ * the server can cryptographically verify the customer's hashed credentials and re-hydrate
+ * the customer record into its runtime database.
+ */
+export function createSignedCustomerVaultToken(customer: CustomerAccount): string {
+  const payload = {
+    i: customer.id,
+    n: customer.fullName,
+    e: customer.email.toLowerCase(),
+    s: customer.passwordSalt,
+    h: customer.passwordHash,
+    c: customer.createdAt,
+  };
+  const encoded = Buffer.from(JSON.stringify(payload), 'utf-8').toString('base64url');
+  const sig = signHmac(`vault.${encoded}`);
+  return `mgcv.${encoded}.${sig}`;
+}
+
+export function verifySignedCustomerVaultToken(token: string): CustomerAccount | null {
+  if (!token || !token.startsWith('mgcv.')) return null;
+  const parts = token.split('.');
+  if (parts.length !== 3) return null;
+  const [, encoded, sig] = parts;
+  const expectedSig = signHmac(`vault.${encoded}`);
+  try {
+    if (
+      sig.length !== expectedSig.length ||
+      !crypto.timingSafeEqual(Buffer.from(sig), Buffer.from(expectedSig))
+    ) {
+      return null;
+    }
+    const raw = Buffer.from(encoded, 'base64url').toString('utf-8');
+    const parsed = JSON.parse(raw) as {
+      i: number;
+      n: string;
+      e: string;
+      s: string;
+      h: string;
+      c: string;
+    };
+    if (!parsed || !parsed.e || !parsed.s || !parsed.h) return null;
+    return {
+      id: Number(parsed.i || 1),
+      fullName: String(parsed.n || ''),
+      email: String(parsed.e).toLowerCase(),
+      role: 'customer',
+      passwordSalt: String(parsed.s),
+      passwordHash: String(parsed.h),
+      createdAt: String(parsed.c || new Date().toISOString()),
     };
   } catch {
     return null;
@@ -449,11 +1055,51 @@ export interface ApiHandlerResult {
  */
 export function processAuthRequest(req: IncomingAuthRequest): ApiHandlerResult {
   const method = (req.method || 'GET').toUpperCase();
+  if (method === 'OPTIONS') {
+    return {
+      status: 200,
+      headers: {
+        'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+        'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-Session-Token, X-Customer-Vault, X-CSRF-Token',
+      },
+      body: { success: true },
+    };
+  }
+
   const action = String(req.query?.action || '').trim();
   const body = (req.body || {}) as Record<string, unknown>;
   const db = loadDatabase();
   if (!Array.isArray(db.customers)) {
     db.customers = [];
+  }
+
+  // Hydrate any server-signed customer vault tokens provided by the client or cookie
+  // so cold-started Vercel serverless containers remain in sync with registered customers
+  const vaultHeader = getHeader(req.headers, 'x-customer-vault');
+  const cookies = parseCookies(getHeader(req.headers, 'cookie'));
+  const vaultCookie = cookies['MGC_CVAULT'] || '';
+  const bodyVaultTokens = Array.isArray(body.customerVaultTokens)
+    ? (body.customerVaultTokens as unknown[]).map((t) => String(t || ''))
+    : [];
+  const candidateVaultTokens = [
+    ...vaultHeader.split(',').map((s) => s.trim()),
+    vaultCookie.trim(),
+    ...bodyVaultTokens,
+  ].filter(Boolean);
+
+  let vaultHydrated = false;
+  for (const vToken of candidateVaultTokens) {
+    const verifiedCustomer = verifySignedCustomerVaultToken(vToken);
+    if (
+      verifiedCustomer &&
+      !db.customers.some((c) => c.email.toLowerCase() === verifiedCustomer.email.toLowerCase())
+    ) {
+      db.customers.push(verifiedCustomer);
+      vaultHydrated = true;
+    }
+  }
+  if (vaultHydrated) {
+    saveDatabase(db);
   }
 
   if (method === 'GET' && action === 'check') {
@@ -607,6 +1253,7 @@ export function processAuthRequest(req: IncomingAuthRequest): ApiHandlerResult {
       lastActivity: Date.now(),
     };
     const sid = createSignedSessionToken(sessionPayload);
+    const customerVaultToken = createSignedCustomerVaultToken(newCustomer);
     saveSession(sid, sessionPayload);
 
     return {
@@ -628,6 +1275,7 @@ export function processAuthRequest(req: IncomingAuthRequest): ApiHandlerResult {
         },
         csrfToken,
         sessionToken: sid,
+        customerVaultToken,
       },
     };
   }
@@ -692,6 +1340,7 @@ export function processAuthRequest(req: IncomingAuthRequest): ApiHandlerResult {
         lastActivity: Date.now(),
       };
       const sid = createSignedSessionToken(sessionPayload);
+      const customerVaultToken = createSignedCustomerVaultToken(customer);
       saveSession(sid, sessionPayload);
 
       return {
@@ -712,6 +1361,7 @@ export function processAuthRequest(req: IncomingAuthRequest): ApiHandlerResult {
           },
           csrfToken,
           sessionToken: sid,
+          customerVaultToken,
         },
       };
     }
