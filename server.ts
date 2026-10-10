@@ -1,4 +1,5 @@
 import express from 'express';
+import fs from 'fs';
 import http from 'http';
 import path from 'path';
 import { createServer as createViteServer } from 'vite';
@@ -68,6 +69,21 @@ app.all(['/api/orders', '/api/orders.php'], (req, res) => {
 // ============================================================================
 // 4B. /api/upload & /api/upload.php
 // ============================================================================
+app.get(['/api/upload', '/api/upload.php'], (req, res) => {
+  const safeName = path.basename(String(req.query.file || '').trim());
+  if (safeName && /^mgc_prod_[A-Za-z0-9_]+\.(jpg|jpeg|png|webp)$/i.test(safeName)) {
+    const pubPath = path.resolve(process.cwd(), 'public', 'uploads', safeName);
+    const tmpPath = path.join('/tmp', 'malik_g_uploads', safeName);
+    if (fs.existsSync(pubPath)) {
+      return res.sendFile(pubPath);
+    }
+    if (fs.existsSync(tmpPath)) {
+      return res.sendFile(tmpPath);
+    }
+  }
+  res.status(404).json({ success: false, error: 'Image not found.' });
+});
+
 app.post(['/api/upload', '/api/upload.php'], (req, res) => {
   sendApiResult(res, processUploadRequest(toIncomingAuthRequest(req)));
 });

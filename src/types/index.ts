@@ -8,6 +8,18 @@ export type OrderStatusType =
   | 'Delivered'
   | 'Cancelled';
 
+export interface CategoryRecord {
+  id: number;
+  name: string;
+  slug: string;
+  description: string;
+  subtitle?: string;
+  active: boolean;
+  productCount?: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface Product {
   dbId?: number;
   id: string;
@@ -18,6 +30,7 @@ export interface Product {
   offerPrice?: number | null;
   discountPercent?: number;
   category: CategoryType;
+  categoryId?: number;
   sizes?: string[];
   colors?: { name: string; hex: string }[];
   rating: number;
@@ -27,6 +40,8 @@ export interface Product {
   image: string;
   gallery: string[];
   inStock: boolean;
+  stockQuantity?: number;
+  offerType?: 'none' | 'percentage' | 'price';
   published?: boolean;
   isNewArrival?: boolean;
   isTrending?: boolean;
@@ -34,6 +49,7 @@ export interface Product {
   sku: string;
   fabricOrMaterial: string;
   createdAt?: string;
+  updatedAt?: string;
 }
 
 export interface CartItemType {
@@ -88,12 +104,15 @@ export interface DashboardStats {
   shippedOrders: number;
   deliveredOrders: number;
   cancelledOrders: number;
+  confirmedSalesOrders?: number;
   totalProducts: number;
   outOfStockProducts: number;
   publishedProducts: number;
   totalRevenue: number;
+  confirmedRevenue?: number;
   deliveredRevenue: number;
   pendingOrderValue: number;
+  cancelledOrderValue?: number;
   periods: {
     today: { sales: number; orders: number };
     thisWeek: { sales: number; orders: number };

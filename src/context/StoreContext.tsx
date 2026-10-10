@@ -21,12 +21,20 @@ export interface AuthenticatedCustomer {
   role: 'customer';
 }
 
+export interface AuthenticatedAdmin {
+  id: number;
+  email: string;
+  role: 'admin';
+}
+
 interface StoreContextType {
   products: Product[];
   categories: string[];
   refreshCatalog: () => Promise<void>;
   customerUser: AuthenticatedCustomer | null;
+  adminUser: AuthenticatedAdmin | null;
   setCustomerSession: (user: AuthenticatedCustomer | null, sessionToken?: string) => void;
+  setAdminSession: (admin: AuthenticatedAdmin | null, sessionToken?: string) => void;
   refreshCustomerAuth: () => Promise<void>;
   logoutCustomer: () => Promise<void>;
   cart: CartItemType[];
@@ -354,6 +362,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   const [quickViewProduct, setQuickViewProduct] = useState<Product | null>(null);
   const [toasts, setToasts] = useState<ToastMessage[]>([]);
   const [customerUser, setCustomerUser] = useState<AuthenticatedCustomer | null>(null);
+  const [adminUser, setAdminUser] = useState<AuthenticatedAdmin | null>(null);
 
   const setCustomerSession = useCallback(
     (user: AuthenticatedCustomer | null, sessionToken?: string) => {
@@ -361,6 +370,22 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         setStoredSessionToken(sessionToken);
       }
       setCustomerUser(user);
+      if (user) {
+        setAdminUser(null);
+      }
+    },
+    []
+  );
+
+  const setAdminSession = useCallback(
+    (admin: AuthenticatedAdmin | null, sessionToken?: string) => {
+      if (typeof sessionToken === 'string') {
+        setStoredSessionToken(sessionToken);
+      }
+      setAdminUser(admin);
+      if (admin) {
+        setCustomerUser(null);
+      }
     },
     []
   );
@@ -373,18 +398,33 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       });
       if (!res.ok) {
         setCustomerUser(null);
+        setAdminUser(null);
         return;
       }
       const data = await safeJsonParse<{
+        authenticated?: boolean;
         customerAuthenticated?: boolean;
         role?: string | null;
         sessionToken?: string;
+        admin?: { id?: number; email?: string };
         user?: { id?: number; fullName?: string; email?: string; role?: string };
       }>(res);
-      if (data.customerAuthenticated && data.role === 'customer' && data.user?.email) {
+      if (data.authenticated === true && data.role === 'admin') {
         if (data.sessionToken) {
           setStoredSessionToken(data.sessionToken);
         }
+        const resolvedEmail = String(data.admin?.email || data.user?.email || '').trim();
+        setAdminUser({
+          id: Number(data.admin?.id || data.user?.id || 1),
+          email: resolvedEmail,
+          role: 'admin',
+        });
+        setCustomerUser(null);
+      } else if (data.customerAuthenticated && data.role === 'customer' && data.user?.email) {
+        if (data.sessionToken) {
+          setStoredSessionToken(data.sessionToken);
+        }
+        setAdminUser(null);
         setCustomerUser({
           id: Number(data.user.id || 0),
           fullName: String(data.user.fullName || '').trim(),
@@ -393,9 +433,11 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         });
       } else {
         setCustomerUser(null);
+        setAdminUser(null);
       }
     } catch {
       setCustomerUser(null);
+      setAdminUser(null);
     }
   }, []);
 
@@ -438,10 +480,14 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       if (catRes.ok) {
         const catData = await safeJsonParse<{
           success?: boolean;
-          categories?: { name: string }[];
+          categories?: { name: string; active?: boolean }[];
         }>(catRes);
         if (catData.success && Array.isArray(catData.categories)) {
-          setCategories(catData.categories.map((c: { name: string }) => c.name));
+          setCategories(
+            catData.categories
+              .filter((c) => c.active !== false)
+              .map((c) => c.name)
+          );
         }
       }
     } catch {
@@ -744,6 +790,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     }
     setStoredSessionToken('');
     setCustomerUser(null);
+    setAdminUser(null);
   }, []);
 
   return (
@@ -753,7 +800,9 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         categories,
         refreshCatalog,
         customerUser,
+        adminUser,
         setCustomerSession,
+        setAdminSession,
         refreshCustomerAuth,
         logoutCustomer,
         cart,

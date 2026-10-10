@@ -29,6 +29,7 @@ export interface Product {
   offerPrice?: number | null;
   discountPercent?: number;
   category: Category;
+  categoryId?: number;
   image: string;
   gallery: string[];
   rating: number;
@@ -36,6 +37,8 @@ export interface Product {
   isNewArrival?: boolean;
   isTrending?: boolean;
   inStock: boolean;
+  stockQuantity?: number;
+  offerType?: 'none' | 'percentage' | 'price';
   published?: boolean;
   sizes?: string[];
   colors?: ProductColor[];
@@ -43,6 +46,7 @@ export interface Product {
   careOrNotes?: string;
   tags: string[];
   createdAt?: string;
+  updatedAt?: string;
 }
 
 export interface CartItemType {
@@ -577,6 +581,10 @@ export interface CategoryRecord {
   name: string;
   slug: string;
   subtitle: string;
+  description?: string;
+  active?: boolean;
+  createdAt?: string;
+  updatedAt?: string;
 }
 
 export interface SessionData {
@@ -842,6 +850,147 @@ export function saveDatabase(db: DatabaseSchema): void {
   }
 }
 
+const DEFAULT_STORE_CATEGORIES: { name: string; slug: string; subtitle: string }[] = [
+  { name: 'Shirts', slug: 'shirts', subtitle: 'Smart styles for every occasion' },
+  { name: 'Pants', slug: 'pants', subtitle: 'Comfort meets modern style' },
+  { name: 'Shoes', slug: 'shoes', subtitle: 'Step into premium style' },
+  { name: 'Watches', slug: 'watches', subtitle: 'Time made stylish' },
+  { name: 'Perfumes', slug: 'perfumes', subtitle: 'Make your presence unforgettable' },
+  { name: 'Accessories', slug: 'accessories', subtitle: 'Essential leather craftsmanship' },
+];
+
+export function normalizeCategoryNameKey(rawName: string): string {
+  return rawName.trim().replace(/\s+/g, ' ').toLowerCase();
+}
+
+export function cleanCategoryName(rawName: string): string {
+  return rawName.trim().replace(/\s+/g, ' ');
+}
+
+function ensureCategoriesAndProductLinks(db: DatabaseSchema): boolean {
+  let updated = false;
+  const nowIso = new Date().toISOString();
+
+  if (!Array.isArray(db.categories)) {
+    db.categories = [];
+    updated = true;
+  }
+
+  // Deduplicate existing categories by normalized name
+  const seenKeys = new Set<string>();
+  const dedupedCategories: CategoryRecord[] = [];
+  for (const cat of db.categories) {
+    const cleanedName = cleanCategoryName(String(cat.name || ''));
+    if (!cleanedName) {
+      updated = true;
+      continue;
+    }
+    const key = normalizeCategoryNameKey(cleanedName);
+    if (seenKeys.has(key)) {
+      updated = true;
+      continue;
+    }
+    seenKeys.add(key);
+
+    const desc =
+      cat.description !== undefined
+        ? String(cat.description).trim()
+        : String(cat.subtitle || '').trim();
+    const subtitle = desc || String(cat.subtitle || 'Curated collection at Malik G Collection').trim();
+    const active = cat.active !== false;
+    const createdAt = cat.createdAt || nowIso;
+    const updatedAt = cat.updatedAt || createdAt;
+    const slug =
+      cat.slug ||
+      cleanedName
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, '-')
+        .replace(/^-+|-+$/g, '');
+
+    if (
+      cat.name !== cleanedName ||
+      cat.description === undefined ||
+      cat.active === undefined ||
+      !cat.createdAt ||
+      !cat.updatedAt
+    ) {
+      updated = true;
+    }
+
+    dedupedCategories.push({
+      id: Number(cat.id || dedupedCategories.length + 1),
+      name: cleanedName,
+      slug,
+      subtitle,
+      description: desc,
+      active,
+      createdAt,
+      updatedAt,
+    });
+  }
+
+  // Ensure the required default store categories (Shirts, Pants, Shoes, Watches, Perfumes, plus any existing product categories) exist without creating duplicates
+  // Note: We only auto-seed the core store categories if the categories array was empty or missing a core category that has products
+  for (const defCat of DEFAULT_STORE_CATEGORIES) {
+    const key = normalizeCategoryNameKey(defCat.name);
+    const hasProductsInCat =
+      Array.isArray(db.products) &&
+      db.products.some((p) => normalizeCategoryNameKey(String(p.category || '')) === key);
+    const isCoreFive = ['shirts', 'pants', 'shoes', 'watches', 'perfumes'].includes(key);
+    if (!seenKeys.has(key) && (dedupedCategories.length === 0 || hasProductsInCat || isCoreFive)) {
+      const nextId =
+        dedupedCategories.length > 0
+          ? Math.max(...dedupedCategories.map((c) => Number(c.id || 0))) + 1
+          : 1;
+      dedupedCategories.push({
+        id: nextId,
+        name: defCat.name,
+        slug: defCat.slug,
+        subtitle: defCat.subtitle,
+        description: defCat.subtitle,
+        active: true,
+        createdAt: nowIso,
+        updatedAt: nowIso,
+      });
+      seenKeys.add(key);
+      updated = true;
+    }
+  }
+
+  db.categories = dedupedCategories;
+
+  // Link products to categoryId and keep category name synchronized
+  if (Array.isArray(db.products)) {
+    db.products = db.products.map((p) => {
+      let matchedCat =
+        p.categoryId !== undefined
+          ? db.categories.find((c) => c.id === Number(p.categoryId))
+          : undefined;
+
+      if (!matchedCat && p.category) {
+        const pKey = normalizeCategoryNameKey(String(p.category));
+        matchedCat = db.categories.find(
+          (c) => normalizeCategoryNameKey(c.name) === pKey
+        );
+      }
+
+      if (matchedCat) {
+        if (p.categoryId !== matchedCat.id || p.category !== matchedCat.name) {
+          updated = true;
+          return {
+            ...p,
+            categoryId: matchedCat.id,
+            category: matchedCat.name,
+          };
+        }
+      }
+      return p;
+    });
+  }
+
+  return updated;
+}
+
 export function loadDatabase(): DatabaseSchema {
   try {
     const dbFile = resolveDbFilePath();
@@ -870,21 +1019,20 @@ export function loadDatabase(): DatabaseSchema {
           parsed.admins = ensuredAdmins.admins;
           updated = true;
         }
-        parsed.products = parsed.products.map((p) => {
-          const seed = INITIAL_PRODUCTS.find((sp) => sp.id === p.id);
-          if (seed && p.price === seed.originalPrice) {
-            updated = true;
-            return {
-              ...p,
-              price: seed.price,
-              oldPrice: seed.oldPrice,
-              originalPrice: seed.originalPrice,
-              offerPrice: seed.offerPrice,
-              discountPercent: seed.discountPercent,
-            };
-          }
-          return p;
-        });
+        parsed.products = parsed.products.map((p) => ({
+          ...p,
+          originalPrice: Number(p.originalPrice ?? p.oldPrice ?? p.price),
+          stockQuantity:
+            typeof p.stockQuantity === 'number'
+              ? p.stockQuantity
+              : p.inStock === false
+              ? 0
+              : 25,
+          published: p.published !== false,
+        }));
+        if (ensureCategoriesAndProductLinks(parsed)) {
+          updated = true;
+        }
         if (updated) {
           saveDatabase(parsed);
         }
@@ -900,6 +1048,7 @@ export function loadDatabase(): DatabaseSchema {
     return memoryDbFallback;
   }
 
+  const nowIso = new Date().toISOString();
   const defaultPass = hashPassword(INITIAL_OWNER_PASSWORD);
   const initialDb: DatabaseSchema = {
     admins: [
@@ -909,19 +1058,21 @@ export function loadDatabase(): DatabaseSchema {
         role: 'admin',
         passwordSalt: defaultPass.salt,
         passwordHash: defaultPass.hash,
-        updatedAt: new Date().toISOString(),
+        updatedAt: nowIso,
       },
     ],
     customers: [],
     sessions: {},
-    categories: [
-      { id: 1, name: 'Shirts', slug: 'shirts', subtitle: 'Smart styles for every occasion' },
-      { id: 2, name: 'Pants', slug: 'pants', subtitle: 'Comfort meets modern style' },
-      { id: 3, name: 'Shoes', slug: 'shoes', subtitle: 'Step into premium style' },
-      { id: 4, name: 'Watches', slug: 'watches', subtitle: 'Time made stylish' },
-      { id: 5, name: 'Perfumes', slug: 'perfumes', subtitle: 'Make your presence unforgettable' },
-      { id: 6, name: 'Accessories', slug: 'accessories', subtitle: 'Essential leather craftsmanship' },
-    ],
+    categories: DEFAULT_STORE_CATEGORIES.map((c, idx) => ({
+      id: idx + 1,
+      name: c.name,
+      slug: c.slug,
+      subtitle: c.subtitle,
+      description: c.subtitle,
+      active: true,
+      createdAt: nowIso,
+      updatedAt: nowIso,
+    })),
     products: INITIAL_PRODUCTS.map((p, idx) => ({
       ...p,
       dbId: idx + 1,
@@ -930,6 +1081,7 @@ export function loadDatabase(): DatabaseSchema {
     orders: [],
   };
 
+  ensureCategoriesAndProductLinks(initialDb);
   saveDatabase(initialDb);
   return initialDb;
 }
@@ -1522,56 +1674,43 @@ export function processAuthRequest(req: IncomingAuthRequest): ApiHandlerResult {
   };
 }
 
+function countProductsForCategory(db: DatabaseSchema, cat: CategoryRecord): number {
+  const catKey = normalizeCategoryNameKey(cat.name);
+  return db.products.filter(
+    (p) =>
+      (p.categoryId !== undefined && Number(p.categoryId) === cat.id) ||
+      normalizeCategoryNameKey(String(p.category || '')) === catKey
+  ).length;
+}
+
+function serializeCategoryRecord(db: DatabaseSchema, cat: CategoryRecord) {
+  const nowIso = new Date().toISOString();
+  const description =
+    cat.description !== undefined ? String(cat.description) : String(cat.subtitle || '');
+  return {
+    id: cat.id,
+    name: cat.name,
+    slug:
+      cat.slug ||
+      cat.name
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, '-')
+        .replace(/^-+|-+$/g, ''),
+    description,
+    subtitle: description || cat.subtitle || 'Curated collection at Malik G Collection',
+    active: cat.active !== false,
+    productCount: countProductsForCategory(db, cat),
+    createdAt: cat.createdAt || nowIso,
+    updatedAt: cat.updatedAt || cat.createdAt || nowIso,
+  };
+}
+
 /**
  * Portable request processor for /api/categories.php & /api/categories
  */
 export function processCategoriesRequest(req: IncomingAuthRequest): ApiHandlerResult {
   const method = (req.method || 'GET').toUpperCase();
-  const body = (req.body || {}) as Record<string, unknown>;
-  const db = loadDatabase();
-
-  if (method === 'GET') {
-    return { status: 200, body: { success: true, categories: db.categories } };
-  }
-
-  if (method === 'POST') {
-    const sess = getAdminSession(req);
-    if (!sess) {
-      return { status: 401, body: { success: false, error: 'Unauthorized.' } };
-    }
-
-    const name = String(body.name || '').trim();
-    const subtitle = String(
-      body.subtitle || 'Curated collection at Malik G Collection'
-    ).trim();
-    if (!name) {
-      return { status: 400, body: { success: false, error: 'Category name is required.' } };
-    }
-
-    if (db.categories.some((c) => c.name.toLowerCase() === name.toLowerCase())) {
-      return { status: 400, body: { success: false, error: 'Category already exists.' } };
-    }
-
-    const newCat: CategoryRecord = {
-      id: db.categories.length + 1,
-      name,
-      slug: name.toLowerCase().replace(/[^a-z0-9]+/g, '-'),
-      subtitle,
-    };
-    db.categories.push(newCat);
-    saveDatabase(db);
-    return { status: 200, body: { success: true, category: newCat } };
-  }
-
-  return { status: 405, body: { success: false, error: 'Method not allowed.' } };
-}
-
-/**
- * Portable request processor for /api/products.php & /api/products
- */
-export function processProductsRequest(req: IncomingAuthRequest): ApiHandlerResult {
-  const method = (req.method || 'GET').toUpperCase();
-  const action = String(req.query?.action || 'list').trim();
+  const action = String(req.query?.action || '').trim();
   const body = (req.body || {}) as Record<string, unknown>;
   const db = loadDatabase();
 
@@ -1583,6 +1722,314 @@ export function processProductsRequest(req: IncomingAuthRequest): ApiHandlerResu
         body: {
           success: false,
           authenticated: false,
+          message: 'Unauthorized. Owner authentication required.',
+          error: 'Unauthorized. Owner authentication required.',
+        },
+      };
+    }
+
+    const search = String(req.query?.search || '').trim().toLowerCase();
+    let list = db.categories.map((cat) => serializeCategoryRecord(db, cat));
+
+    if (!isAdminReq) {
+      list = list.filter((c) => c.active !== false);
+    }
+
+    if (search) {
+      list = list.filter((c) => c.name.toLowerCase().includes(search));
+    }
+
+    return {
+      status: 200,
+      body: {
+        success: true,
+        categories: list,
+      },
+    };
+  }
+
+  if (method === 'POST') {
+    const sess = getAdminSession(req);
+    if (!sess) {
+      return {
+        status: 401,
+        body: {
+          success: false,
+          authenticated: false,
+          message: 'Unauthorized. Owner authentication required.',
+          error: 'Unauthorized. Owner authentication required.',
+        },
+      };
+    }
+
+    const effectiveAction = action || String(body.action || 'create').trim();
+
+    if (effectiveAction === 'create') {
+      const cleanedName = cleanCategoryName(String(body.name || ''));
+      const description = String(
+        body.description !== undefined ? body.description : body.subtitle || ''
+      ).trim();
+      const active = body.active !== undefined ? Boolean(body.active) : true;
+
+      if (!cleanedName) {
+        return {
+          status: 400,
+          body: {
+            success: false,
+            message: 'Category name is required.',
+            error: 'Category name is required.',
+          },
+        };
+      }
+
+      const targetKey = normalizeCategoryNameKey(cleanedName);
+      if (db.categories.some((c) => normalizeCategoryNameKey(c.name) === targetKey)) {
+        return {
+          status: 409,
+          body: {
+            success: false,
+            message: `A category named "${cleanedName}" already exists.`,
+            error: `A category named "${cleanedName}" already exists.`,
+          },
+        };
+      }
+
+      const nowIso = new Date().toISOString();
+      const nextId =
+        db.categories.length > 0
+          ? Math.max(...db.categories.map((c) => Number(c.id || 0))) + 1
+          : 1;
+
+      const newCat: CategoryRecord = {
+        id: nextId,
+        name: cleanedName,
+        slug: cleanedName
+          .toLowerCase()
+          .replace(/[^a-z0-9]+/g, '-')
+          .replace(/^-+|-+$/g, ''),
+        subtitle: description || 'Curated collection at Malik G Collection',
+        description,
+        active,
+        createdAt: nowIso,
+        updatedAt: nowIso,
+      };
+
+      db.categories.push(newCat);
+      saveDatabase(db);
+
+      return {
+        status: 200,
+        body: {
+          success: true,
+          message: `Category "${newCat.name}" created successfully.`,
+          category: serializeCategoryRecord(db, newCat),
+        },
+      };
+    }
+
+    if (effectiveAction === 'update') {
+      const targetId = Number(body.id || 0);
+      const idx = db.categories.findIndex((c) => Number(c.id) === targetId);
+      if (!targetId || idx === -1) {
+        return {
+          status: 404,
+          body: {
+            success: false,
+            message: 'Category not found.',
+            error: 'Category not found.',
+          },
+        };
+      }
+
+      const cleanedName = cleanCategoryName(String(body.name || ''));
+      if (!cleanedName) {
+        return {
+          status: 400,
+          body: {
+            success: false,
+            message: 'Category name is required.',
+            error: 'Category name is required.',
+          },
+        };
+      }
+
+      const targetKey = normalizeCategoryNameKey(cleanedName);
+      const duplicate = db.categories.some(
+        (c, i) => i !== idx && normalizeCategoryNameKey(c.name) === targetKey
+      );
+      if (duplicate) {
+        return {
+          status: 409,
+          body: {
+            success: false,
+            message: `Another category named "${cleanedName}" already exists.`,
+            error: `Another category named "${cleanedName}" already exists.`,
+          },
+        };
+      }
+
+      const existing = db.categories[idx];
+      const previousNameKey = normalizeCategoryNameKey(existing.name);
+      const description =
+        body.description !== undefined
+          ? String(body.description).trim()
+          : existing.description !== undefined
+          ? existing.description
+          : existing.subtitle;
+      const active =
+        body.active !== undefined ? Boolean(body.active) : existing.active !== false;
+      const nowIso = new Date().toISOString();
+
+      const updatedCat: CategoryRecord = {
+        ...existing,
+        name: cleanedName,
+        slug: cleanedName
+          .toLowerCase()
+          .replace(/[^a-z0-9]+/g, '-')
+          .replace(/^-+|-+$/g, ''),
+        subtitle: description || 'Curated collection at Malik G Collection',
+        description,
+        active,
+        createdAt: existing.createdAt || nowIso,
+        updatedAt: nowIso,
+      };
+
+      db.categories[idx] = updatedCat;
+
+      // Update any products linked to this category ID or previous category name so they stay linked to the same category ID and reflect the updated name
+      db.products = db.products.map((p) => {
+        const matchesId = p.categoryId !== undefined && Number(p.categoryId) === updatedCat.id;
+        const matchesOldName =
+          normalizeCategoryNameKey(String(p.category || '')) === previousNameKey;
+        if (matchesId || matchesOldName) {
+          return {
+            ...p,
+            categoryId: updatedCat.id,
+            category: updatedCat.name,
+            updatedAt: nowIso,
+          };
+        }
+        return p;
+      });
+
+      saveDatabase(db);
+
+      return {
+        status: 200,
+        body: {
+          success: true,
+          message: `Category "${updatedCat.name}" updated successfully.`,
+          category: serializeCategoryRecord(db, updatedCat),
+        },
+      };
+    }
+
+    if (effectiveAction === 'toggle_active') {
+      const targetId = Number(body.id || 0);
+      const idx = db.categories.findIndex((c) => Number(c.id) === targetId);
+      if (!targetId || idx === -1) {
+        return {
+          status: 404,
+          body: {
+            success: false,
+            message: 'Category not found.',
+            error: 'Category not found.',
+          },
+        };
+      }
+
+      const nextActive =
+        body.active !== undefined ? Boolean(body.active) : db.categories[idx].active === false;
+      const nowIso = new Date().toISOString();
+      db.categories[idx].active = nextActive;
+      db.categories[idx].updatedAt = nowIso;
+      saveDatabase(db);
+
+      return {
+        status: 200,
+        body: {
+          success: true,
+          message: `Category "${db.categories[idx].name}" is now ${
+            nextActive ? 'Active' : 'Inactive'
+          }.`,
+          category: serializeCategoryRecord(db, db.categories[idx]),
+        },
+      };
+    }
+
+    if (effectiveAction === 'delete') {
+      const targetId = Number(body.id || 0);
+      const idx = db.categories.findIndex((c) => Number(c.id) === targetId);
+      if (!targetId || idx === -1) {
+        return {
+          status: 404,
+          body: {
+            success: false,
+            message: 'Category not found.',
+            error: 'Category not found.',
+          },
+        };
+      }
+
+      const targetCat = db.categories[idx];
+      const assignedProductsCount = countProductsForCategory(db, targetCat);
+      if (assignedProductsCount > 0) {
+        const blockMsg =
+          'This category contains products. Please move or remove those products before deleting the category.';
+        return {
+          status: 400,
+          body: {
+            success: false,
+            message: blockMsg,
+            error: blockMsg,
+            productCount: assignedProductsCount,
+          },
+        };
+      }
+
+      db.categories.splice(idx, 1);
+      saveDatabase(db);
+
+      return {
+        status: 200,
+        body: {
+          success: true,
+          message: `Category "${targetCat.name}" deleted successfully.`,
+        },
+      };
+    }
+
+    return {
+      status: 400,
+      body: {
+        success: false,
+        message: 'Invalid category action.',
+        error: 'Invalid category action.',
+      },
+    };
+  }
+
+  return { status: 405, body: { success: false, error: 'Method not allowed.' } };
+}
+
+/**
+ * Portable request processor for /api/products.php & /api/products
+ */
+export function processProductsRequest(req: IncomingAuthRequest): ApiHandlerResult {
+  const method = (req.method || 'GET').toUpperCase();
+  const body = (req.body || {}) as Record<string, unknown>;
+  const action = String(req.query?.action || body.action || 'list').trim();
+  const db = loadDatabase();
+
+  if (method === 'GET') {
+    const isAdminReq = String(req.query?.admin || '') === '1';
+    if (isAdminReq && !getAdminSession(req)) {
+      return {
+        status: 401,
+        body: {
+          success: false,
+          authenticated: false,
+          message: 'Unauthorized. Owner authentication required.',
           error: 'Unauthorized. Owner authentication required.',
         },
       };
@@ -1603,6 +2050,7 @@ export function processProductsRequest(req: IncomingAuthRequest): ApiHandlerResu
         body: {
           success: false,
           authenticated: false,
+          message: 'Unauthorized. Owner authentication required.',
           error: 'Unauthorized. Owner authentication required.',
         },
       };
@@ -1612,34 +2060,217 @@ export function processProductsRequest(req: IncomingAuthRequest): ApiHandlerResu
       const name = String(body.name || body.title || '').trim();
       const description = String(body.description || '').trim();
       const shortDescription =
-        String(body.shortDescription || '').trim() || description.slice(0, 140);
-      const category = String(body.category || 'Shirts').trim();
+        String(body.shortDescription || '').trim() ||
+        (description ? description.slice(0, 140) : name);
+      const rawCategory = cleanCategoryName(String(body.category || ''));
+      const requestedCategoryId = body.categoryId ? Number(body.categoryId) : undefined;
       const image = String(body.image || '').trim();
-      const originalPrice = Number(body.originalPrice || 0);
-      const rawOffer = body.offerPrice;
-      const offerPrice =
-        rawOffer !== null && rawOffer !== undefined && rawOffer !== '' && Number(rawOffer) > 0
-          ? Number(rawOffer)
-          : null;
+      const originalPrice = Number(body.originalPrice);
 
-      if (!name || !description || !image || originalPrice <= 0) {
+      if (!name) {
         return {
           status: 400,
           body: {
             success: false,
-            error: 'Title, description, image, and valid original price are required.',
+            message: 'Product title is required.',
+            error: 'Product title is required.',
           },
         };
       }
 
+      if (!rawCategory && !requestedCategoryId) {
+        return {
+          status: 400,
+          body: {
+            success: false,
+            message: 'Product category is required.',
+            error: 'Product category is required.',
+          },
+        };
+      }
+
+      // Resolve category from database
+      let matchedCategory = requestedCategoryId
+        ? db.categories.find((c) => c.id === requestedCategoryId)
+        : undefined;
+      if (!matchedCategory && rawCategory) {
+        const key = normalizeCategoryNameKey(rawCategory);
+        matchedCategory = db.categories.find(
+          (c) => normalizeCategoryNameKey(c.name) === key
+        );
+      }
+
+      if (matchedCategory && matchedCategory.active === false) {
+        // Allow keeping the same inactive category only if editing an existing product that already had it
+        let alreadyAssignedToThisInactive = false;
+        if (action === 'update') {
+          const targetId = String(body.id || '').trim();
+          const existingProd = db.products.find(
+            (p) => p.id === targetId || (body.dbId && p.dbId === Number(body.dbId))
+          );
+          if (
+            existingProd &&
+            (existingProd.categoryId === matchedCategory.id ||
+              normalizeCategoryNameKey(String(existingProd.category || '')) ===
+                normalizeCategoryNameKey(matchedCategory.name))
+          ) {
+            alreadyAssignedToThisInactive = true;
+          }
+        }
+        if (!alreadyAssignedToThisInactive) {
+          return {
+            status: 400,
+            body: {
+              success: false,
+              message: `Category "${matchedCategory.name}" is currently inactive and cannot be assigned to products.`,
+              error: `Category "${matchedCategory.name}" is currently inactive and cannot be assigned to products.`,
+            },
+          };
+        }
+      }
+
+      if (!matchedCategory) {
+        const nowIsoCat = new Date().toISOString();
+        const nextCatId =
+          db.categories.length > 0
+            ? Math.max(...db.categories.map((c) => Number(c.id || 0))) + 1
+            : 1;
+        matchedCategory = {
+          id: nextCatId,
+          name: rawCategory,
+          slug: rawCategory
+            .toLowerCase()
+            .replace(/[^a-z0-9]+/g, '-')
+            .replace(/^-+|-+$/g, ''),
+          subtitle: 'Curated collection at Malik G Collection',
+          description: 'Curated collection at Malik G Collection',
+          active: true,
+          createdAt: nowIsoCat,
+          updatedAt: nowIsoCat,
+        };
+        db.categories.push(matchedCategory);
+      }
+
+      const category = matchedCategory.name;
+      const categoryId = matchedCategory.id;
+
+      if (!image) {
+        return {
+          status: 400,
+          body: {
+            success: false,
+            message: 'At least one product image is required.',
+            error: 'At least one product image is required.',
+          },
+        };
+      }
+
+      if (!Number.isFinite(originalPrice) || originalPrice <= 0) {
+        return {
+          status: 400,
+          body: {
+            success: false,
+            message: 'Original price must be a valid positive amount.',
+            error: 'Original price must be a valid positive amount.',
+          },
+        };
+      }
+
+      // Handle individual product offer modes: 'none' | 'percentage' | 'price'
+      const rawOfferType = String(body.offerType || '').trim();
+      const rawOfferPrice = body.offerPrice;
+      const rawDiscountPercent = body.discountPercent;
+
+      let offerType: 'none' | 'percentage' | 'price' = 'none';
+      if (rawOfferType === 'percentage' || rawOfferType === 'price' || rawOfferType === 'none') {
+        offerType = rawOfferType;
+      } else if (
+        rawOfferPrice !== null &&
+        rawOfferPrice !== undefined &&
+        rawOfferPrice !== '' &&
+        Number(rawOfferPrice) > 0
+      ) {
+        offerType = 'price';
+      } else if (
+        rawDiscountPercent !== null &&
+        rawDiscountPercent !== undefined &&
+        rawDiscountPercent !== '' &&
+        Number(rawDiscountPercent) > 0
+      ) {
+        offerType = 'percentage';
+      }
+
+      let offerPrice: number | null = null;
+      let discountPercent = 0;
+
+      if (offerType === 'percentage') {
+        const pct = Number(rawDiscountPercent ?? 0);
+        if (!Number.isFinite(pct) || pct < 0 || pct >= 100) {
+          return {
+            status: 400,
+            body: {
+              success: false,
+              message: 'Discount percentage must be between 0 and 99.',
+              error: 'Discount percentage must be between 0 and 99.',
+            },
+          };
+        }
+        if (pct > 0) {
+          discountPercent = Math.round(pct);
+          offerPrice = Math.round(originalPrice * (1 - discountPercent / 100));
+        } else {
+          offerType = 'none';
+        }
+      } else if (offerType === 'price') {
+        if (rawOfferPrice !== null && rawOfferPrice !== undefined && rawOfferPrice !== '') {
+          const parsedOffer = Number(rawOfferPrice);
+          if (!Number.isFinite(parsedOffer) || parsedOffer < 0) {
+            return {
+              status: 400,
+              body: {
+                success: false,
+                message: 'Offer price cannot be negative.',
+                error: 'Offer price cannot be negative.',
+              },
+            };
+          }
+          if (parsedOffer > originalPrice) {
+            return {
+              status: 400,
+              body: {
+                success: false,
+                message: 'Offer price cannot be greater than original price.',
+                error: 'Offer price cannot be greater than original price.',
+              },
+            };
+          }
+          if (parsedOffer > 0 && parsedOffer < originalPrice) {
+            offerPrice = Math.round(parsedOffer);
+            discountPercent = Math.round(
+              ((originalPrice - offerPrice) / originalPrice) * 100
+            );
+          } else {
+            offerPrice = null;
+            discountPercent = 0;
+            offerType = 'none';
+          }
+        } else {
+          offerType = 'none';
+        }
+      } else {
+        // No Offer
+        offerPrice = null;
+        discountPercent = 0;
+      }
+
       const effectivePrice =
-        offerPrice !== null && offerPrice < originalPrice ? offerPrice : originalPrice;
+        offerPrice !== null && offerPrice > 0 && offerPrice < originalPrice
+          ? offerPrice
+          : originalPrice;
       const oldPrice =
-        offerPrice !== null && offerPrice < originalPrice ? originalPrice : undefined;
-      const discountPercent =
-        oldPrice && oldPrice > effectivePrice
-          ? Math.round(((oldPrice - effectivePrice) / oldPrice) * 100)
-          : 0;
+        offerPrice !== null && offerPrice > 0 && offerPrice < originalPrice
+          ? originalPrice
+          : undefined;
 
       const colors: { name: string; hex: string }[] = Array.isArray(body.colors)
         ? body.colors
@@ -1660,33 +2291,40 @@ export function processProductsRequest(req: IncomingAuthRequest): ApiHandlerResu
         ? body.sizes.map((s: unknown) => String(s).trim()).filter(Boolean)
         : [];
 
-      const inStock = body.inStock !== undefined ? Boolean(body.inStock) : true;
+      const rawStockQty = body.stockQuantity;
+      const stockQuantity =
+        rawStockQty !== undefined && rawStockQty !== null && rawStockQty !== ''
+          ? Math.max(0, Math.floor(Number(rawStockQty) || 0))
+          : body.inStock === false
+          ? 0
+          : 25;
+
+      const inStock =
+        body.inStock !== undefined ? Boolean(body.inStock) : stockQuantity > 0;
       const published = body.published !== undefined ? Boolean(body.published) : true;
       const isNewArrival = body.isNewArrival !== undefined ? Boolean(body.isNewArrival) : true;
       const isTrending = body.isTrending !== undefined ? Boolean(body.isTrending) : false;
       const fabricOrMaterial =
         String(body.fabricOrMaterial || '').trim() || 'Premium Malik G Selection';
 
-      if (!db.categories.some((c) => c.name.toLowerCase() === category.toLowerCase())) {
-        db.categories.push({
-          id: db.categories.length + 1,
-          name: category,
-          slug: category.toLowerCase().replace(/[^a-z0-9]+/g, '-'),
-          subtitle: 'Curated collection at Malik G Collection',
-        });
-      }
+      const nowIso = new Date().toISOString();
 
       if (action === 'create') {
+        const nextDbId =
+          db.products.length > 0
+            ? Math.max(...db.products.map((p, i) => Number(p.dbId || i + 1))) + 1
+            : 1;
         const newProd: Product = {
-          dbId: db.products.length + 1,
-          id: `mg-prod-${Date.now()}`,
+          dbId: nextDbId,
+          id: `mg-prod-${Date.now()}-${Math.floor(100 + Math.random() * 900)}`,
           sku: `MGC-${category.slice(0, 2).toUpperCase()}-${Math.floor(
             1000 + Math.random() * 9000
           )}`,
           name,
           shortDescription,
-          description,
+          description: description || shortDescription,
           category,
+          categoryId,
           image,
           gallery: [image],
           price: effectivePrice,
@@ -1694,9 +2332,11 @@ export function processProductsRequest(req: IncomingAuthRequest): ApiHandlerResu
           originalPrice,
           offerPrice,
           discountPercent,
+          offerType,
           colors,
           sizes,
           inStock,
+          stockQuantity,
           published,
           isNewArrival,
           isTrending,
@@ -1704,22 +2344,41 @@ export function processProductsRequest(req: IncomingAuthRequest): ApiHandlerResu
           rating: 4.9,
           reviewsCount: 18,
           tags: [category.toLowerCase(), name.toLowerCase()],
-          createdAt: new Date().toISOString(),
+          createdAt: nowIso,
+          updatedAt: nowIso,
         };
         db.products.unshift(newProd);
         saveDatabase(db);
-        return { status: 200, body: { success: true, product: newProd } };
+        return {
+          status: 200,
+          body: {
+            success: true,
+            message: 'Product created successfully.',
+            product: newProd,
+          },
+        };
       } else {
-        const idx = db.products.findIndex((p) => p.id === body.id);
+        const targetId = String(body.id || '').trim();
+        const idx = db.products.findIndex(
+          (p) => p.id === targetId || (body.dbId && p.dbId === Number(body.dbId))
+        );
         if (idx === -1) {
-          return { status: 404, body: { success: false, error: 'Product not found.' } };
+          return {
+            status: 404,
+            body: {
+              success: false,
+              message: 'Product not found.',
+              error: 'Product not found.',
+            },
+          };
         }
         const updated: Product = {
           ...db.products[idx],
           name,
           shortDescription,
-          description,
+          description: description || shortDescription,
           category,
+          categoryId,
           image,
           gallery: [image],
           price: effectivePrice,
@@ -1727,49 +2386,128 @@ export function processProductsRequest(req: IncomingAuthRequest): ApiHandlerResu
           originalPrice,
           offerPrice,
           discountPercent,
+          offerType,
           colors,
           sizes,
           inStock,
+          stockQuantity,
           published,
           isNewArrival,
           isTrending,
           fabricOrMaterial,
+          updatedAt: nowIso,
         };
         db.products[idx] = updated;
         saveDatabase(db);
-        return { status: 200, body: { success: true, product: updated } };
+        return {
+          status: 200,
+          body: {
+            success: true,
+            message: 'Product updated successfully.',
+            product: updated,
+          },
+        };
       }
     }
 
     if (action === 'delete') {
-      const id = String(body.id || '');
+      const id = String(body.id || '').trim();
+      const exists = db.products.some((p) => p.id === id);
+      if (!exists) {
+        return {
+          status: 404,
+          body: {
+            success: false,
+            message: 'Product not found.',
+            error: 'Product not found.',
+          },
+        };
+      }
+      // Remove product from catalog while leaving all historical db.orders and orderItems snapshots intact
       db.products = db.products.filter((p) => p.id !== id);
       saveDatabase(db);
-      return { status: 200, body: { success: true } };
+      return {
+        status: 200,
+        body: {
+          success: true,
+          message: 'Product deleted successfully.',
+        },
+      };
     }
 
     if (action === 'toggle_publish') {
-      const id = String(body.id || '');
+      const id = String(body.id || '').trim();
       const idx = db.products.findIndex((p) => p.id === id);
-      if (idx !== -1) {
-        db.products[idx].published = Boolean(body.published);
-        saveDatabase(db);
+      if (idx === -1) {
+        return {
+          status: 404,
+          body: {
+            success: false,
+            message: 'Product not found.',
+            error: 'Product not found.',
+          },
+        };
       }
-      return { status: 200, body: { success: true } };
+      db.products[idx].published = Boolean(body.published);
+      db.products[idx].updatedAt = new Date().toISOString();
+      saveDatabase(db);
+      return {
+        status: 200,
+        body: {
+          success: true,
+          message: db.products[idx].published
+            ? 'Product published.'
+            : 'Product unpublished.',
+          product: db.products[idx],
+        },
+      };
     }
 
     if (action === 'toggle_stock') {
-      const id = String(body.id || '');
+      const id = String(body.id || '').trim();
       const idx = db.products.findIndex((p) => p.id === id);
-      if (idx !== -1) {
-        db.products[idx].inStock = Boolean(body.inStock);
-        saveDatabase(db);
+      if (idx === -1) {
+        return {
+          status: 404,
+          body: {
+            success: false,
+            message: 'Product not found.',
+            error: 'Product not found.',
+          },
+        };
       }
-      return { status: 200, body: { success: true } };
+      const nextInStock = Boolean(body.inStock);
+      db.products[idx].inStock = nextInStock;
+      if (body.stockQuantity !== undefined) {
+        db.products[idx].stockQuantity = Math.max(0, Math.floor(Number(body.stockQuantity) || 0));
+      } else if (!nextInStock) {
+        db.products[idx].stockQuantity = 0;
+      } else if ((db.products[idx].stockQuantity ?? 0) === 0) {
+        db.products[idx].stockQuantity = 10;
+      }
+      db.products[idx].updatedAt = new Date().toISOString();
+      saveDatabase(db);
+      return {
+        status: 200,
+        body: {
+          success: true,
+          message: nextInStock
+            ? 'Product marked In Stock.'
+            : 'Product marked Out of Stock.',
+          product: db.products[idx],
+        },
+      };
     }
   }
 
-  return { status: 400, body: { success: false, error: 'Invalid products action.' } };
+  return {
+    status: 400,
+    body: {
+      success: false,
+      message: 'Invalid products action.',
+      error: 'Invalid products action.',
+    },
+  };
 }
 
 /**
@@ -2025,8 +2763,23 @@ export function processOrdersRequest(req: IncomingAuthRequest): ApiHandlerResult
 
 /**
  * Portable request processor for /api/upload.php & /api/upload
+ * Validates file type (JPG, PNG, WEBP), rejects executable files, validates size (<= 5MB),
+ * writes to public/uploads (or /tmp/malik_g_uploads on serverless), and returns a clean URL.
  */
 export function processUploadRequest(req: IncomingAuthRequest): ApiHandlerResult {
+  const method = (req.method || 'GET').toUpperCase();
+
+  if (method !== 'POST') {
+    return {
+      status: 405,
+      body: {
+        success: false,
+        message: 'Method not allowed.',
+        error: 'Method not allowed.',
+      },
+    };
+  }
+
   if (!getAdminSession(req)) {
     return {
       status: 401,
@@ -2038,12 +2791,123 @@ export function processUploadRequest(req: IncomingAuthRequest): ApiHandlerResult
       },
     };
   }
+
   const body = (req.body || {}) as Record<string, unknown>;
-  const dataUrl = String(body.dataUrl || '');
-  if (dataUrl.startsWith('data:image/')) {
-    return { status: 200, body: { success: true, url: dataUrl } };
+  const fileName = String(body.fileName || 'product.jpg').trim();
+  const dataUrl = String(body.dataUrl || '').trim();
+
+  // Block any executable or script extensions
+  const forbiddenExtRegex = /\.(php|phtml|phar|exe|sh|bat|cmd|js|mjs|cjs|ts|jsp|asp|aspx|py|rb|pl|cgi|htaccess|svg|html|htm)$/i;
+  if (forbiddenExtRegex.test(fileName)) {
+    return {
+      status: 400,
+      body: {
+        success: false,
+        message: 'Executable or script files are not allowed. Only JPG, PNG, and WEBP images are permitted.',
+        error: 'Executable or script files are not allowed. Only JPG, PNG, and WEBP images are permitted.',
+      },
+    };
   }
-  return { status: 200, body: { success: true, url: '/uploads/category_shirts.jpg' } };
+
+  const match = dataUrl.match(/^data:(image\/(?:jpeg|jpg|png|webp));base64,([A-Za-z0-9+/=\s]+)$/i);
+  if (!match) {
+    return {
+      status: 400,
+      body: {
+        success: false,
+        message: 'Invalid image format. Only JPG, PNG, and WEBP images are allowed.',
+        error: 'Invalid image format. Only JPG, PNG, and WEBP images are allowed.',
+      },
+    };
+  }
+
+  const mimeType = match[1].toLowerCase();
+  const base64Payload = match[2].replace(/\s+/g, '');
+  const buffer = Buffer.from(base64Payload, 'base64');
+
+  const maxBytes = 5 * 1024 * 1024; // 5 MB
+  if (buffer.length === 0 || buffer.length > maxBytes) {
+    return {
+      status: 400,
+      body: {
+        success: false,
+        message: 'Image file size must be between 1 byte and 5 MB.',
+        error: 'Image file size must be between 1 byte and 5 MB.',
+      },
+    };
+  }
+
+  // Verify magic bytes for JPEG, PNG, or WEBP so disguised executables are rejected
+  const isJpeg = buffer.length >= 3 && buffer[0] === 0xff && buffer[1] === 0xd8 && buffer[2] === 0xff;
+  const isPng =
+    buffer.length >= 8 &&
+    buffer[0] === 0x89 &&
+    buffer[1] === 0x50 &&
+    buffer[2] === 0x4e &&
+    buffer[3] === 0x47;
+  const isWebp =
+    buffer.length >= 12 &&
+    buffer.toString('ascii', 0, 4) === 'RIFF' &&
+    buffer.toString('ascii', 8, 12) === 'WEBP';
+
+  if (!isJpeg && !isPng && !isWebp) {
+    return {
+      status: 400,
+      body: {
+        success: false,
+        message: 'Invalid image file signature. Only genuine JPG, PNG, and WEBP images are allowed.',
+        error: 'Invalid image file signature. Only genuine JPG, PNG, and WEBP images are allowed.',
+      },
+    };
+  }
+
+  const ext = mimeType.includes('png') ? 'png' : mimeType.includes('webp') ? 'webp' : 'jpg';
+  const safeFilename = `mgc_prod_${Date.now()}_${crypto.randomBytes(4).toString('hex')}.${ext}`;
+
+  // Try writing to public/uploads first (works in AI Studio & standard Node servers)
+  try {
+    const publicUploadsDir = path.resolve(process.cwd(), 'public', 'uploads');
+    if (!fs.existsSync(publicUploadsDir)) {
+      fs.mkdirSync(publicUploadsDir, { recursive: true });
+    }
+    fs.accessSync(publicUploadsDir, fs.constants.W_OK);
+    const destPath = path.join(publicUploadsDir, safeFilename);
+    fs.writeFileSync(destPath, buffer);
+    return {
+      status: 200,
+      body: {
+        success: true,
+        url: `/uploads/${safeFilename}`,
+        imageUrl: `/uploads/${safeFilename}`,
+      },
+    };
+  } catch {
+    // On read-only serverless container (Vercel), store in /tmp/malik_g_uploads and serve via /api/upload?file=...
+    try {
+      const tmpUploadsDir = path.join('/tmp', 'malik_g_uploads');
+      if (!fs.existsSync(tmpUploadsDir)) {
+        fs.mkdirSync(tmpUploadsDir, { recursive: true });
+      }
+      fs.writeFileSync(path.join(tmpUploadsDir, safeFilename), buffer);
+      return {
+        status: 200,
+        body: {
+          success: true,
+          url: `/api/upload?file=${encodeURIComponent(safeFilename)}`,
+          imageUrl: `/api/upload?file=${encodeURIComponent(safeFilename)}`,
+        },
+      };
+    } catch {
+      return {
+        status: 500,
+        body: {
+          success: false,
+          message: 'Failed to store uploaded image on server.',
+          error: 'Failed to store uploaded image on server.',
+        },
+      };
+    }
+  }
 }
 
 /**
@@ -2072,6 +2936,7 @@ export function processDashboardRequest(req: IncomingAuthRequest): ApiHandlerRes
 
   const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
 
+  let totalUniqueOrders = 0;
   let pendingOrders = 0;
   let confirmedOrders = 0;
   let processingOrders = 0;
@@ -2081,6 +2946,7 @@ export function processDashboardRequest(req: IncomingAuthRequest): ApiHandlerRes
   let totalRevenue = 0;
   let deliveredRevenue = 0;
   let pendingOrderValue = 0;
+  let cancelledOrderValue = 0;
 
   let todaySales = 0;
   let todayOrders = 0;
@@ -2089,7 +2955,16 @@ export function processDashboardRequest(req: IncomingAuthRequest): ApiHandlerRes
   let monthSales = 0;
   let monthOrders = 0;
 
+  const seenOrderKeys = new Set<string>();
+
   for (const o of db.orders) {
+    const orderKey = String(o.orderNumber || o.id || '').trim().toLowerCase();
+    if (orderKey) {
+      if (seenOrderKeys.has(orderKey)) continue;
+      seenOrderKeys.add(orderKey);
+    }
+
+    totalUniqueOrders++;
     const amt = Number(o.total || 0);
     const createdDate = new Date(o.createdAt);
 
@@ -2107,9 +2982,18 @@ export function processDashboardRequest(req: IncomingAuthRequest): ApiHandlerRes
       deliveredRevenue += amt;
     } else if (o.status === 'Cancelled') {
       cancelledOrders++;
+      cancelledOrderValue += amt;
     }
 
-    if (o.status !== 'Cancelled') {
+    // Completed sales revenue includes non-cancelled confirmed orders (Confirmed, Processing, Shipped, Delivered)
+    // Excludes Cancelled orders and excludes Pending orders as completed sales
+    const isCompletedSale =
+      o.status === 'Confirmed' ||
+      o.status === 'Processing' ||
+      o.status === 'Shipped' ||
+      o.status === 'Delivered';
+
+    if (isCompletedSale) {
       totalRevenue += amt;
 
       if (o.createdAt.slice(0, 10) === todayStr) {
@@ -2127,6 +3011,9 @@ export function processDashboardRequest(req: IncomingAuthRequest): ApiHandlerRes
     }
   }
 
+  const confirmedSalesOrders =
+    confirmedOrders + processingOrders + shippedOrders + deliveredOrders;
+
   const totalProducts = db.products.length;
   const outOfStockProducts = db.products.filter((p) => !p.inStock).length;
   const publishedProducts = db.products.filter((p) => p.published !== false).length;
@@ -2136,24 +3023,27 @@ export function processDashboardRequest(req: IncomingAuthRequest): ApiHandlerRes
     body: {
       success: true,
       stats: {
-        totalOrders: db.orders.length,
+        totalOrders: totalUniqueOrders,
         pendingOrders,
         confirmedOrders,
         processingOrders,
         shippedOrders,
         deliveredOrders,
         cancelledOrders,
+        confirmedSalesOrders,
         totalProducts,
         outOfStockProducts,
         publishedProducts,
         totalRevenue,
+        confirmedRevenue: totalRevenue,
         deliveredRevenue,
         pendingOrderValue,
+        cancelledOrderValue,
         periods: {
           today: { sales: todaySales, orders: todayOrders },
           thisWeek: { sales: weekSales, orders: weekOrders },
           thisMonth: { sales: monthSales, orders: monthOrders },
-          allTime: { sales: totalRevenue, orders: db.orders.length },
+          allTime: { sales: totalRevenue, orders: confirmedSalesOrders },
         },
       },
     },

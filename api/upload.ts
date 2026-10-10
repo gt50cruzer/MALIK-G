@@ -1,3 +1,5 @@
+import fs from 'fs';
+import path from 'path';
 import type { IncomingMessage, ServerResponse } from 'http';
 import { processUploadRequest, type IncomingAuthRequest } from './_backend.js';
 
@@ -63,12 +65,44 @@ async function parseJsonBody(req: VercelRequest): Promise<Record<string, unknown
 }
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
-  res.setHeader('Content-Type', 'application/json; charset=utf-8');
-  if ((req.method || '').toUpperCase() === 'OPTIONS') {
+  const method = (req.method || 'GET').toUpperCase();
+
+  if (method === 'OPTIONS') {
+    res.setHeader('Content-Type', 'application/json; charset=utf-8');
     res.statusCode = 200;
     res.end(JSON.stringify({ success: true }));
     return;
   }
+
+  // Serve uploaded image file when requested via GET /api/upload?file=mgc_prod_...
+  if (method === 'GET') {
+    const urlStr = req.url || '';
+    const qIndex = urlStr.indexOf('?');
+    const params = qIndex !== -1 ? new URLSearchParams(urlStr.slice(qIndex + 1)) : null;
+    const rawFile = String(req.query?.file || params?.get('file') || '').trim();
+    const safeName = path.basename(rawFile);
+    if (safeName && /^mgc_prod_[A-Za-z0-9_]+\.(jpg|jpeg|png|webp)$/i.test(safeName)) {
+      const tmpPath = path.join('/tmp', 'malik_g_uploads', safeName);
+      const pubPath = path.resolve(process.cwd(), 'public', 'uploads', safeName);
+      const target = fs.existsSync(tmpPath) ? tmpPath : fs.existsSync(pubPath) ? pubPath : '';
+      if (target) {
+        const ext = path.extname(safeName).toLowerCase();
+        const mime =
+          ext === '.png' ? 'image/png' : ext === '.webp' ? 'image/webp' : 'image/jpeg';
+        res.setHeader('Content-Type', mime);
+        res.setHeader('Cache-Control', 'public, max-age=86400');
+        res.statusCode = 200;
+        res.end(fs.readFileSync(target));
+        return;
+      }
+    }
+    res.setHeader('Content-Type', 'application/json; charset=utf-8');
+    res.statusCode = 404;
+    res.end(JSON.stringify({ success: false, error: 'Image not found.' }));
+    return;
+  }
+
+  res.setHeader('Content-Type', 'application/json; charset=utf-8');
 
   try {
     const body = await parseJsonBody(req);

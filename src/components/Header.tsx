@@ -11,6 +11,7 @@ import {
   Package,
   Settings,
   LogOut,
+  LayoutDashboard,
 } from 'lucide-react';
 import { useStore } from '../context/StoreContext';
 import { BRAND_INFO } from '../data/products';
@@ -51,6 +52,7 @@ export const Header: React.FC = () => {
     wishlist,
     setSearchOpen,
     customerUser,
+    adminUser,
     logoutCustomer,
     showToast,
   } = useStore();
@@ -106,6 +108,9 @@ export const Header: React.FC = () => {
   const avatarInitial = customerUser
     ? getCustomerAvatarInitial(customerUser.fullName, customerUser.email)
     : '';
+
+  const isVerifiedAdmin = Boolean(adminUser && adminUser.role === 'admin');
+  const isInAdminRoute = location.pathname.startsWith('/admin');
 
   return (
     <div className="sticky top-0 z-40 w-full bg-[#0B0B0C]/95 backdrop-blur-md border-b border-white/10">
@@ -257,6 +262,17 @@ export const Header: React.FC = () => {
             {wishlist.length > 0 && <span className="sr-only">({wishlist.length})</span>}
           </Link>
 
+          {isVerifiedAdmin && !isInAdminRoute && (
+            <Link
+              to="/admin/"
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-[#121214] border border-[#D4AF37]/60 text-[#D4AF37] hover:bg-[#D4AF37] hover:text-[#0B0B0C] text-[11px] sm:text-xs font-bold uppercase tracking-[0.14em] transition-colors whitespace-nowrap shrink-0 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[#D4AF37]"
+              aria-label="Open Admin Panel"
+            >
+              <LayoutDashboard className="w-3.5 h-3.5 shrink-0" />
+              <span>ADMIN PANEL</span>
+            </Link>
+          )}
+
           {customerUser ? (
             <div className="relative" ref={profileDropdownRef}>
               <button
@@ -351,6 +367,16 @@ export const Header: React.FC = () => {
                 </div>
               )}
             </div>
+          ) : isVerifiedAdmin ? (
+            <button
+              type="button"
+              onClick={handleCustomerLogout}
+              className="hidden sm:inline-flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium uppercase tracking-wider text-[#A1A1AA] hover:text-red-300 transition-colors whitespace-nowrap focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[#D4AF37]"
+              aria-label="Logout"
+            >
+              <LogOut className="w-3.5 h-3.5" />
+              <span>Logout</span>
+            </button>
           ) : (
             <Link
               to="/sign-in"
@@ -391,7 +417,26 @@ export const Header: React.FC = () => {
             </NavLink>
           ))}
           <div className="pt-4 mt-4 border-t border-white/10 flex flex-col gap-2 text-xs text-[#A1A1AA] px-3">
-            {!customerUser && (
+            {isVerifiedAdmin && !isInAdminRoute && (
+              <Link
+                to="/admin/"
+                className="inline-flex items-center gap-2 py-2.5 px-3 bg-[#D4AF37]/15 border border-[#D4AF37]/50 text-xs font-bold uppercase tracking-[0.14em] text-[#D4AF37] hover:bg-[#D4AF37] hover:text-[#0B0B0C] transition-colors mb-1"
+              >
+                <LayoutDashboard className="w-4 h-4 shrink-0" />
+                <span>ADMIN PANEL</span>
+              </Link>
+            )}
+            {isVerifiedAdmin && (
+              <button
+                type="button"
+                onClick={handleCustomerLogout}
+                className="inline-flex items-center gap-2 py-2 text-sm font-medium text-red-300 hover:text-red-200 transition-colors border-b border-white/5 mb-1 text-left"
+              >
+                <LogOut className="w-4 h-4 shrink-0" />
+                <span>Logout</span>
+              </button>
+            )}
+            {!customerUser && !isVerifiedAdmin && (
               <Link
                 to="/sign-in"
                 className="inline-flex items-center justify-between py-2 text-sm font-medium text-[#F5F5F0] hover:text-[#D4AF37] transition-colors border-b border-white/5 mb-1"
